@@ -34,6 +34,8 @@ class SteamClient:
         self._api_key = api_key
         self._session = requests.Session()
         self._session.proxies.update(proxy)
+        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/111.0.0.0 Safari/537.36'}
+        self._session.headers.update(headers)
         self.steam_guard = steam_guard
         self.was_login_executed = False
         self.username = username
