@@ -29,15 +29,18 @@ def login_required(func):
 
 
 class SteamClient:
-    def __init__(self, api_key: str, username: str = None, password: str = None, steam_guard:str = None) -> None:
+    def __init__(self, proxy: dict, api_key: str, username: str = None, password: str = None,
+                 steam_guard: str = None) -> None:
         self._api_key = api_key
         self._session = requests.Session()
+        self._session.proxies.update(proxy)
         self.steam_guard = steam_guard
         self.was_login_executed = False
         self.username = username
         self._password = password
         self.market = SteamMarket(self._session)
         self.chat = SteamChat(self._session)
+        
 
     def login(self, username: str, password: str, steam_guard: str) -> None:
         self.steam_guard = guard.load_steam_guard(steam_guard)
@@ -90,11 +93,12 @@ class SteamClient:
 
     @login_required
     def get_my_inventory(self, game: GameOptions, merge: bool = True, count: int = 5000) -> dict:
-        steam_id = self.steam_guard['steamid']
+        steam_id = self.steam_guard['Session']['SteamID']
         return self.get_partner_inventory(steam_id, game, merge, count)
 
     @login_required
-    def get_partner_inventory(self, partner_steam_id: str, game: GameOptions, merge: bool = True, count: int = 5000) -> dict:
+    def get_partner_inventory(self, partner_steam_id: str, game: GameOptions, merge: bool = True,
+                              count: int = 5000) -> dict:
         url = '/'.join([SteamUrl.COMMUNITY_URL, 'inventory', partner_steam_id, game.app_id, game.context_id])
         params = {'l': 'english',
                   'count': count}
@@ -206,7 +210,7 @@ class SteamClient:
         return text_between(offer_response_text, "var g_ulTradePartnerSteamID = '", "';")
 
     def _confirm_transaction(self, trade_offer_id: str) -> dict:
-        confirmation_executor = ConfirmationExecutor(self.steam_guard['identity_secret'], self.steam_guard['steamid'],
+        confirmation_executor = ConfirmationExecutor(self.steam_guard['identity_secret'], self.steam_guard['Session']['SteamID'],
                                                      self._session)
         return confirmation_executor.send_trade_allow_request(trade_offer_id)
 
@@ -217,9 +221,11 @@ class SteamClient:
 
     def cancel_trade_offer(self, trade_offer_id: str) -> dict:
         url = 'https://steamcommunity.com/tradeoffer/' + trade_offer_id + '/cancel'
-        response = self._session.post(url, data={'sessionid': self._get_session_id()}).json()
+
+        response = self._session.post(url, data={'sessionid': self._get_session_id()})
+        response = response.json()
         return response
-    
+
     @login_required
     def make_offer(self, items_from_me: List[Asset], items_from_them: List[Asset], partner_steam_id: str,
                    message: str = '') -> dict:
@@ -250,7 +256,7 @@ class SteamClient:
         data = response.json()
         return data['response']['players'][0]
 
-    def get_friend_list(self, steam_id: str, relationship_filter: str="all") -> dict:
+    def get_friend_list(self, steam_id: str, relationship_filter: str = "all") -> dict:
         params = {
             'key': self._api_key,
             'steamid': steam_id,
@@ -288,7 +294,7 @@ class SteamClient:
 
     @login_required
     def make_offer_with_url(self, items_from_me: List[Asset], items_from_them: List[Asset],
-                            trade_offer_url: str, message: str = '', case_sensitive: bool=True) -> dict:
+                            trade_offer_url: str, message: str = '', case_sensitive: bool = True) -> dict:
         token = get_key_value_from_url(trade_offer_url, 'token', case_sensitive)
         partner_account_id = get_key_value_from_url(trade_offer_url, 'partner', case_sensitive)
         partner_steam_id = account_id_to_steam_id(partner_account_id)

@@ -174,6 +174,6 @@ class SteamMarket:
         return response
 
     def _confirm_sell_listing(self, asset_id: str) -> dict:
-        con_executor = ConfirmationExecutor(self._steam_guard['identity_secret'], self._steam_guard['steamid'],
+        con_executor = ConfirmationExecutor(self._steam_guard['identity_secret'], self._steam_guard['Session']['SteamID'],
                                             self._session)
         return con_executor.confirm_sell_listing(asset_id)
