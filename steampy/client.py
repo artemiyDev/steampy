@@ -34,7 +34,8 @@ class SteamClient:
         self._api_key = api_key
         self._session = requests.Session()
         self._session.proxies.update(proxy)
-        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/111.0.0.0 Safari/537.36'}
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/111.0.0.0 Safari/537.36'}
         self._session.headers.update(headers)
         self.steam_guard = steam_guard
         self.was_login_executed = False
@@ -42,7 +43,6 @@ class SteamClient:
         self._password = password
         self.market = SteamMarket(self._session)
         self.chat = SteamChat(self._session)
-        
 
     def login(self, username: str, password: str, steam_guard: str) -> None:
         self.steam_guard = guard.load_steam_guard(steam_guard)
@@ -212,8 +212,14 @@ class SteamClient:
         return text_between(offer_response_text, "var g_ulTradePartnerSteamID = '", "';")
 
     def _confirm_transaction(self, trade_offer_id: str) -> dict:
-        confirmation_executor = ConfirmationExecutor(self.steam_guard['identity_secret'], self.steam_guard['Session']['SteamID'],
-                                                     self._session)
+        try:
+            confirmation_executor = ConfirmationExecutor(self.steam_guard['identity_secret'],
+                                                         self.steam_guard['Session']['SteamID'],
+                                                         self._session)
+        except KeyError:
+            confirmation_executor = ConfirmationExecutor(self.steam_guard['identity_secret'],
+                                                         self.steam_guard['steam_id'],
+                                                         self._session)
         return confirmation_executor.send_trade_allow_request(trade_offer_id)
 
     def decline_trade_offer(self, trade_offer_id: str) -> dict:
