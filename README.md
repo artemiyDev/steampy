@@ -8,7 +8,8 @@ Donate bitcoin: 3PRzESHsTVkCFK7osjwFGQLZjSf7qXP1Ta
 `steampy` is a library for Python, inspired by node-steam-tradeoffers, node-steam and other libraries for Node.js.
 It was designed as a simple lightweight library, combining features of many steam libraries from Node.js into a single python module.
 `steampy` is capable of logging into steam, fetching trade offers and handling them in simple manner, using steam user credentials
-and SteamGuard file(no need to extract and pass sessionID and webCookie).
+and SteamGuard file, or by passing sessionID and webCookie cookies. 
+'steampy' is also capable of using proxies.
 `steampy` is developed with Python 3 using type hints and many other features its supported for Windows, Linux and MacOs.
 
 Table of Content
@@ -26,7 +27,7 @@ Table of Content
 
 * [Guard module functions](https://github.com/bukson/steampy#guard-module-functions)
 
-* [SteamChat methods](https://github.com/bukson/steampy#steamchat-methods)
+* [Utils methods](https://github.com/bukson/steampy#utils-methods)
 
 * [Test](https://github.com/bukson/steampy#test)
 
@@ -36,6 +37,7 @@ Table of Content
 Installation
 ============
 
+Requires python 3.8 at least
 ```
 pip install steampy
 ```
@@ -48,12 +50,45 @@ Usage
 
 [Obtaining SteamGuard using Android emulation]( https://github.com/codepath/android_guides/wiki/Genymotion-2.0-Emulators-with-Google-Play-support)
 
+** __init__(self, api_key: str, username: str = None, password: str = None, steam_guard: str = None,
+                 login_cookies: dict = None, proxies: dict = None) -> None:**
+
+
+SteamClient needs at least api_key to provide some functionalities. User can also provide username, password
+and SteamGuard file to be able to log in and use more methods. Proxies are also supported.
+
 ```python
 from steampy.client import SteamClient
 
 steam_client = SteamClient('MY_API_KEY')
 steam_client.login('MY_USERNAME', 'MY_PASSWORD', 'PATH_TO_STEAMGUARD_FILE')
 ```
+
+User can also provide login_cookies from browser to log in by cookies.
+
+```python
+from steampy.client import SteamClient
+
+login_cookies = {} # provide dict with cookies
+steam_client = SteamClient('MY_API_KEY',login_cookies=login_cookies)
+assert steam_client.was_login_executed
+```
+
+`proxies` dict can be provided for using proxy for internal SteamClient session.
+
+```python
+from steampy.client import SteamClient
+
+proxies =  {
+    "http": "http://login:password@host:port", 
+    "https": "http://login:password@host:port"
+}
+
+steam_client = SteamClient('MY_API_KEY', proxies=proxies)
+
+```
+
+
 
 If you have `steamid`, `shared_secret` and `identity_secret` you can place it in file `Steamguard.txt` instead of fetching SteamGuard file from device.
 ```python
@@ -89,6 +124,33 @@ SteamClient methods
 
 Unless specified in documentation, the method does not require login to work(it uses API Key from constructor instead)
 
+**def set_proxy(self, proxy: dict) -> dict**
+
+Set proxy for steampy session, example: 
+
+```python
+from steampy.client import SteamClient
+
+steam_client = SteamClient('MY_API_KEY')
+proxies =  {
+    "http": "http://login:password@host:port", 
+    "https": "http://login:password@host:port"
+}
+steam_client.set_proxies(proxies)
+
+```
+
+**def set_login_cookies(self, cookies: dict) -> None**
+
+Set login cookies, can be used instead of normal `login` method.
+
+```python
+from steampy.client import SteamClient
+
+login_cookies = {} # provide dict with cookies
+steam_client = SteamClient('MY_API_KEY',login_cookies=login_cookies)
+assert steam_client.was_login_executed
+```
 
 **login(username: str, password: str, steam_guard: str) -> requests.Response**
 
@@ -104,7 +166,9 @@ steam_client.login('MY_USERNAME', 'MY_PASSWORD', 'PATH_TO_STEAMGUARD_FILE')
 You can also use `with` statement to automatically login and logout.
 
 ```python
-with SteamClient(api_key, login, password, steam_guard_file) as client:
+from steampy.client import SteamClient
+
+with SteamClient('MY_API_KEY', 'MY_USERNAME', 'MY_PASSWORD', 'PATH_TO_STEAMGUARD_FILE') as client:
     client.some_method1(...)
     client.some_method2(...)
     ...
@@ -126,7 +190,9 @@ steam_client.logout()
 You can also use `with` statement to automatically login and logout.
 
 ```python
-with SteamClient(api_key, login, password, steam_guard_file) as client:
+from steampy.client import SteamClient
+
+with SteamClient('MY_API_KEY', 'MY_USERNAME', 'MY_PASSWORD', 'PATH_TO_STEAMGUARD_FILE') as client:
     client.some_method1(...)
     client.some_method2(...)
     ...
@@ -252,115 +318,118 @@ and descriptions merged with data are value.
 `Count` parameter is default max number of items, that can be fetched.
 
 Inventory entries looks like this:
+
 ```python
-{'7146788981': {'actions': [{'link': 'steam://rungame/730/76561202255233023/+csgo_econ_action_preview%20S%owner_steamid%A%assetid%D316070896107169653',
-                             'name': 'Inspect in Game...'}],
-                'amount': '1',
-                'appid': '730',
-                'background_color': '',
-                'classid': '1304827205',
-                'commodity': 0,
-                'contextid': '2',
-                'descriptions': [{'type': 'html',
-                                  'value': 'Exterior: Field-Tested'},
-                                 {'type': 'html', 'value': ' '},
-                                 {'type': 'html',
-                                  'value': 'Powerful and reliable, the AK-47 '
-                                           'is one of the most popular assault '
-                                           'rifles in the world. It is most '
-                                           'deadly in short, controlled bursts '
-                                           'of fire. It has been painted using '
-                                           'a carbon fiber hydrographic and a '
-                                           'dry-transfer decal of a red '
-                                           'pinstripe.\n'
-                                           '\n'
-                                           '<i>Never be afraid to push it to '
-                                           'the limit</i>'},
-                                 {'type': 'html', 'value': ' '},
-                                 {'app_data': {'def_index': '65535',
-                                               'is_itemset_name': 1},
-                                  'color': '9da1a9',
-                                  'type': 'html',
-                                  'value': 'The Phoenix Collection'},
-                                 {'type': 'html', 'value': ' '},
-                                 {'app_data': {'def_index': '65535'},
-                                  'type': 'html',
-                                  'value': '<br><div id="sticker_info" '
-                                           'name="sticker_info" title="Sticker '
-                                           'Details" style="border: 2px solid '
-                                           'rgb(102, 102, 102); border-radius: '
-                                           '6px; width=100; margin:4px; '
-                                           'padding:8px;"><center><img '
-                                           'width=64 height=48 '
-                                           'src="https://steamcdn-a.akamaihd.net/apps/730/icons/econ/stickers/eslkatowice2015/pentasports.a6b0ddffefb5507453456c0d2c35b6a57821c171.png"><img '
-                                           'width=64 height=48 '
-                                           'src="https://steamcdn-a.akamaihd.net/apps/730/icons/econ/stickers/eslkatowice2015/pentasports.a6b0ddffefb5507453456c0d2c35b6a57821c171.png"><img '
-                                           'width=64 height=48 '
-                                           'src="https://steamcdn-a.akamaihd.net/apps/730/icons/econ/stickers/eslkatowice2015/pentasports.a6b0ddffefb5507453456c0d2c35b6a57821c171.png"><img '
-                                           'width=64 height=48 '
-                                           'src="https://steamcdn-a.akamaihd.net/apps/730/icons/econ/stickers/cologne2015/mousesports.3e75da497d9f75fa56f463c22db25f29992561ce.png"><br>Sticker: '
-                                           'PENTA Sports  | Katowice 2015, '
-                                           'PENTA Sports  | Katowice 2015, '
-                                           'PENTA Sports  | Katowice 2015, '
-                                           'mousesports | Cologne '
-                                           '2015</center></div>'}],
-                'icon_drag_url': '',
-                'icon_url': '-9a81dlWLwJ2UUGcVs_nsVtzdOEdtWwKGZZLQHTxDZ7I56KU0Zwwo4NUX4oFJZEHLbXH5ApeO4YmlhxYQknCRvCo04DEVlxkKgpot7HxfDhjxszJemkV09-5lpKKqPrxN7LEmyVQ7MEpiLuSrYmnjQO3-UdsZGHyd4_Bd1RvNQ7T_FDrw-_ng5Pu75iY1zI97bhLsvQz',
-                'icon_url_large': '-9a81dlWLwJ2UUGcVs_nsVtzdOEdtWwKGZZLQHTxDZ7I56KU0Zwwo4NUX4oFJZEHLbXH5ApeO4YmlhxYQknCRvCo04DEVlxkKgpot7HxfDhjxszJemkV09-5lpKKqPrxN7LEm1Rd6dd2j6eQ9N2t2wK3-ENsZ23wcIKRdQE2NwyD_FK_kLq9gJDu7p_KyyRr7nNw-z-DyIFJbNUz',
-                'id': '7146788981',
-                'instanceid': '480085569',
-                'market_actions': [{'link': 'steam://rungame/730/76561202255233023/+csgo_econ_action_preview%20M%listingid%A%assetid%D316070896107169653',
-                                    'name': 'Inspect in Game...'}],
-                'market_hash_name': 'AK-47 | Redline (Field-Tested)',
-                'market_name': 'AK-47 | Redline (Field-Tested)',
-                'market_tradable_restriction': '7',
-                'marketable': 1,
-                'name': 'AK-47 | Redline',
-                'name_color': 'D2D2D2',
-                'owner_descriptions': '',
-                'tags': [{'category': 'Type',
-                          'category_name': 'Type',
-                          'internal_name': 'CSGO_Type_Rifle',
-                          'name': 'Rifle'},
-                         {'category': 'Weapon',
-                          'category_name': 'Weapon',
-                          'internal_name': 'weapon_ak47',
-                          'name': 'AK-47'},
-                         {'category': 'ItemSet',
-                          'category_name': 'Collection',
-                          'internal_name': 'set_community_2',
-                          'name': 'The Phoenix Collection'},
-                         {'category': 'Quality',
-                          'category_name': 'Category',
-                          'internal_name': 'normal',
-                          'name': 'Normal'},
-                         {'category': 'Rarity',
-                          'category_name': 'Quality',
-                          'color': 'd32ce6',
-                          'internal_name': 'Rarity_Legendary_Weapon',
-                          'name': 'Classified'},
-                         {'category': 'Exterior',
-                          'category_name': 'Exterior',
-                          'internal_name': 'WearCategory2',
-                          'name': 'Field-Tested'},
-                         {'category': 'Tournament',
-                          'category_name': 'Tournament',
-                          'internal_name': 'Tournament6',
-                          'name': '2015 ESL One Katowice'},
-                         {'category': 'Tournament',
-                          'category_name': 'Tournament',
-                          'internal_name': 'Tournament7',
-                          'name': '2015 ESL One Cologne'},
-                         {'category': 'TournamentTeam',
-                          'category_name': 'Team',
-                          'internal_name': 'Team39',
-                          'name': 'PENTA Sports'},
-                         {'category': 'TournamentTeam',
-                          'category_name': 'Team',
-                          'internal_name': 'Team29',
-                          'name': 'mousesports'}],
-                'tradable': 1,
-                'type': 'Classified Rifle'}}
+inventory_entry = {'7146788981': {'actions': [{
+                                      'link': 'steam://rungame/730/76561202255233023/+csgo_econ_action_preview%20S%owner_steamid%A%assetid%D316070896107169653',
+                                      'name': 'Inspect in Game...'}],
+                      'amount': '1',
+                      'appid': '730',
+                      'background_color': '',
+                      'classid': '1304827205',
+                      'commodity': 0,
+                      'contextid': '2',
+                      'descriptions': [{'type': 'html',
+                                        'value': 'Exterior: Field-Tested'},
+                                       {'type': 'html', 'value': ' '},
+                                       {'type': 'html',
+                                        'value': 'Powerful and reliable, the AK-47 '
+                                                 'is one of the most popular assault '
+                                                 'rifles in the world. It is most '
+                                                 'deadly in short, controlled bursts '
+                                                 'of fire. It has been painted using '
+                                                 'a carbon fiber hydrographic and a '
+                                                 'dry-transfer decal of a red '
+                                                 'pinstripe.\n'
+                                                 '\n'
+                                                 '<i>Never be afraid to push it to '
+                                                 'the limit</i>'},
+                                       {'type': 'html', 'value': ' '},
+                                       {'app_data': {'def_index': '65535',
+                                                     'is_itemset_name': 1},
+                                        'color': '9da1a9',
+                                        'type': 'html',
+                                        'value': 'The Phoenix Collection'},
+                                       {'type': 'html', 'value': ' '},
+                                       {'app_data': {'def_index': '65535'},
+                                        'type': 'html',
+                                        'value': '<br><div id="sticker_info" '
+                                                 'name="sticker_info" title="Sticker '
+                                                 'Details" style="border: 2px solid '
+                                                 'rgb(102, 102, 102); border-radius: '
+                                                 '6px; width=100; margin:4px; '
+                                                 'padding:8px;"><center><img '
+                                                 'width=64 height=48 '
+                                                 'src="https://steamcdn-a.akamaihd.net/apps/730/icons/econ/stickers/eslkatowice2015/pentasports.a6b0ddffefb5507453456c0d2c35b6a57821c171.png"><img '
+                                                 'width=64 height=48 '
+                                                 'src="https://steamcdn-a.akamaihd.net/apps/730/icons/econ/stickers/eslkatowice2015/pentasports.a6b0ddffefb5507453456c0d2c35b6a57821c171.png"><img '
+                                                 'width=64 height=48 '
+                                                 'src="https://steamcdn-a.akamaihd.net/apps/730/icons/econ/stickers/eslkatowice2015/pentasports.a6b0ddffefb5507453456c0d2c35b6a57821c171.png"><img '
+                                                 'width=64 height=48 '
+                                                 'src="https://steamcdn-a.akamaihd.net/apps/730/icons/econ/stickers/cologne2015/mousesports.3e75da497d9f75fa56f463c22db25f29992561ce.png"><br>Sticker: '
+                                                 'PENTA Sports  | Katowice 2015, '
+                                                 'PENTA Sports  | Katowice 2015, '
+                                                 'PENTA Sports  | Katowice 2015, '
+                                                 'mousesports | Cologne '
+                                                 '2015</center></div>'}],
+                      'icon_drag_url': '',
+                      'icon_url': '-9a81dlWLwJ2UUGcVs_nsVtzdOEdtWwKGZZLQHTxDZ7I56KU0Zwwo4NUX4oFJZEHLbXH5ApeO4YmlhxYQknCRvCo04DEVlxkKgpot7HxfDhjxszJemkV09-5lpKKqPrxN7LEmyVQ7MEpiLuSrYmnjQO3-UdsZGHyd4_Bd1RvNQ7T_FDrw-_ng5Pu75iY1zI97bhLsvQz',
+                      'icon_url_large': '-9a81dlWLwJ2UUGcVs_nsVtzdOEdtWwKGZZLQHTxDZ7I56KU0Zwwo4NUX4oFJZEHLbXH5ApeO4YmlhxYQknCRvCo04DEVlxkKgpot7HxfDhjxszJemkV09-5lpKKqPrxN7LEm1Rd6dd2j6eQ9N2t2wK3-ENsZ23wcIKRdQE2NwyD_FK_kLq9gJDu7p_KyyRr7nNw-z-DyIFJbNUz',
+                      'id': '7146788981',
+                      'instanceid': '480085569',
+                      'market_actions': [{
+                                             'link': 'steam://rungame/730/76561202255233023/+csgo_econ_action_preview%20M%listingid%A%assetid%D316070896107169653',
+                                             'name': 'Inspect in Game...'}],
+                      'market_hash_name': 'AK-47 | Redline (Field-Tested)',
+                      'market_name': 'AK-47 | Redline (Field-Tested)',
+                      'market_tradable_restriction': '7',
+                      'marketable': 1,
+                      'name': 'AK-47 | Redline',
+                      'name_color': 'D2D2D2',
+                      'owner_descriptions': '',
+                      'tags': [{'category': 'Type',
+                                'category_name': 'Type',
+                                'internal_name': 'CSGO_Type_Rifle',
+                                'name': 'Rifle'},
+                               {'category': 'Weapon',
+                                'category_name': 'Weapon',
+                                'internal_name': 'weapon_ak47',
+                                'name': 'AK-47'},
+                               {'category': 'ItemSet',
+                                'category_name': 'Collection',
+                                'internal_name': 'set_community_2',
+                                'name': 'The Phoenix Collection'},
+                               {'category': 'Quality',
+                                'category_name': 'Category',
+                                'internal_name': 'normal',
+                                'name': 'Normal'},
+                               {'category': 'Rarity',
+                                'category_name': 'Quality',
+                                'color': 'd32ce6',
+                                'internal_name': 'Rarity_Legendary_Weapon',
+                                'name': 'Classified'},
+                               {'category': 'Exterior',
+                                'category_name': 'Exterior',
+                                'internal_name': 'WearCategory2',
+                                'name': 'Field-Tested'},
+                               {'category': 'Tournament',
+                                'category_name': 'Tournament',
+                                'internal_name': 'Tournament6',
+                                'name': '2015 ESL One Katowice'},
+                               {'category': 'Tournament',
+                                'category_name': 'Tournament',
+                                'internal_name': 'Tournament7',
+                                'name': '2015 ESL One Cologne'},
+                               {'category': 'TournamentTeam',
+                                'category_name': 'Team',
+                                'internal_name': 'Team39',
+                                'name': 'PENTA Sports'},
+                               {'category': 'TournamentTeam',
+                                'category_name': 'Team',
+                                'internal_name': 'Team29',
+                                'name': 'mousesports'}],
+                      'tradable': 1,
+                      'type': 'Classified Rifle'}}
 ```
 
 **get_partner_inventory(partner_steam_id: str, game: GameOptions, merge: bool = True, count: int = 5000) -> dict**
@@ -378,9 +447,11 @@ to covnert money string to Decimal if `convert_to_decimal` is set to `True`.
 
 Example:
 ```python
- with SteamClient(api_key, login, password, steam_guard_file) as client:
+from steampy.client import SteamClient
+from decimal import Decimal 
+with SteamClient('MY_API_KEY', 'MY_USERNAME', 'MY_PASSWORD', 'PATH_TO_STEAMGUARD_FILE') as client:
             wallet_balance = client.get_wallet_balance()
-            self.assertTrue(type(wallet_balance), decimal.Decimal)
+            assert type(wallet_balance) == Decimal
 ```
 
 market methods
@@ -398,10 +469,13 @@ Default currency is USD
 May rise `TooManyRequests` exception if used more than 20 times in 60 seconds.
 
 ```python
-steam_client = SteamClient(self.credentials.api_key)
+from steampy.client import SteamClient
+from steampy.models import GameOptions
+
+steam_client = SteamClient('API_KEY')
 item = 'M4A1-S | Cyrex (Factory New)'
-steam_client.market.fetch_price(item, game=GameOptions.CS)
-{'volume': '208', 'lowest_price': '$11.30 USD', 'median_price': '$11.33 USD', 'success': True}
+price = steam_client.market.fetch_price(item, game=GameOptions.CS)
+# price == {'volume': '208', 'lowest_price': '$11.30 USD', 'median_price': '$11.33 USD', 'success': True}
 ```
 
 **fetch_price_history(item_hash_name: str, game: GameOptions) -> dict**
@@ -410,8 +484,10 @@ Using `SteamClient.login` method is required before usage
 
 Returns list of price history of and item.
 ```python
-with SteamClient(self.credentials.api_key, self.credentials.login,
-                 self.credentials.password, self.steam_guard_file) as client:
+from steampy.client import SteamClient
+from steampy.models import GameOptions
+
+with SteamClient('MY_API_KEY', 'MY_USERNAME', 'MY_PASSWORD', 'PATH_TO_STEAMGUARD_FILE') as client:
     item = 'M4A1-S | Cyrex (Factory New)'
     response = client.market.fetch_price_history(item, GameOptions.CS)
     response['prices'][0]
@@ -427,9 +503,10 @@ Using `SteamClient.login` method is required before usage
 Returns market listings posted by user
 
 ```python
-steam_client = SteamClient(self.credentials.api_key)
-steam_client.login('MY_USERNAME', 'MY_PASSWORD', 'PATH_TO_STEAMGUARD_FILE')
-listings = steam_client.market.get_my_market_listings()
+from steampy.client import SteamClient
+
+with SteamClient('MY_API_KEY', 'MY_USERNAME', 'MY_PASSWORD', 'PATH_TO_STEAMGUARD_FILE') as client:
+    listings = client.market.get_my_market_listings()
 ```
 
 
@@ -440,11 +517,13 @@ Using `SteamClient.login` method is required before usage
 Create sell order of the asset on the steam market.
 
 ```python
-steam_client = SteamClient(self.credentials.api_key)
-steam_client.login('MY_USERNAME', 'MY_PASSWORD', 'PATH_TO_STEAMGUARD_FILE')
-asset_id_to_sell = 'some_asset_id'
-game = GameOptions.DOTA2
-sell_response = steam_client.market.create_sell_order(asset_id_to_sell, game, "10000")
+from steampy.client import SteamClient
+from steampy.models import GameOptions
+
+with SteamClient('MY_API_KEY', 'MY_USERNAME', 'MY_PASSWORD', 'PATH_TO_STEAMGUARD_FILE') as client:
+    asset_id_to_sell = 'some_asset_id'
+    game = GameOptions.DOTA2
+    sell_response = client.market.create_sell_order(asset_id_to_sell, game, "10000")
 ```
  
 ⚠️ `money_to_receive` has to be in cents, so "100.00" should be passed has "10000"
@@ -456,10 +535,12 @@ Using `SteamClient.login` method is required before usage
 Create buy order of the assets on the steam market.
 
 ```python
-steam_client = SteamClient(self.credentials.api_key)
-steam_client.login('MY_USERNAME', 'MY_PASSWORD', 'PATH_TO_STEAMGUARD_FILE')
-response = steam_client.market.create_buy_order("AK-47 | Redline (Field-Tested)", "1034", 2, GameOptions.CS, Currency.EURO)
-buy_order_id = response["buy_orderid"]
+from steampy.client import SteamClient
+from steampy.models import GameOptions, Currency
+
+with SteamClient('MY_API_KEY', 'MY_USERNAME', 'MY_PASSWORD', 'PATH_TO_STEAMGUARD_FILE') as client:
+    response = client.market.create_buy_order("AK-47 | Redline (Field-Tested)", "1034", 2, GameOptions.CS, Currency.EURO)
+    buy_order_id = response["buy_orderid"]
 ```
 ⚠️ `price_single_item` has to be in cents, so "10.34" should be passed has "1034"
 
@@ -470,11 +551,13 @@ Using `SteamClient.login` method is required before usage
 Buy a certain item from market listing.
 
 ```python
-steam_client = SteamClient(self.credentials.api_key)
-steam_client.login('MY_USERNAME', 'MY_PASSWORD', 'PATH_TO_STEAMGUARD_FILE')
-response = steam_client.market.buy_item('AK-47 | Redline (Field-Tested)', '1942659007774983251', 81, 10,
+from steampy.client import SteamClient
+from steampy.models import Currency, GameOptions
+
+with SteamClient('MY_API_KEY', 'MY_USERNAME', 'MY_PASSWORD', 'PATH_TO_STEAMGUARD_FILE') as client:
+    response = client.market.buy_item('AK-47 | Redline (Field-Tested)', '1942659007774983251', 81, 10,
                                         GameOptions.CS, Currency.RUB)
-wallet_balance = response["wallet_info"]["wallet_balance"]
+    wallet_balance = response["wallet_info"]["wallet_balance"]
 ```
 
 **cancel_sell_order(sell_listing_id: str) -> None**
@@ -484,10 +567,11 @@ Using `SteamClient.login` method is required before usage
 Cancel previously requested sell order on steam market.
 
 ```python
-steam_client = SteamClient(self.credentials.api_key)
-steam_client.login('MY_USERNAME', 'MY_PASSWORD', 'PATH_TO_STEAMGUARD_FILE')
-sell_order_id = "some_sell_order_id"
-response = steam_client.market.cancel_sell_order(sell_order_id)
+from steampy.client import SteamClient
+
+with SteamClient('MY_API_KEY', 'MY_USERNAME', 'MY_PASSWORD', 'PATH_TO_STEAMGUARD_FILE') as client:
+    sell_order_id = "some_sell_order_id"
+    response = client.market.cancel_sell_order(sell_order_id)
 ```
 
 **cancel_buy_order(buy_order_id) -> dict**
@@ -497,10 +581,11 @@ Using `SteamClient.login` method is required before usage
 Cancel previously requested buy order on steam market.
 
 ```python
-steam_client = SteamClient(self.credentials.api_key)
-steam_client.login('MY_USERNAME', 'MY_PASSWORD', 'PATH_TO_STEAMGUARD_FILE')
-buy_order_id = "some_buy_order_id"
-response = steam_client.market.cancel_buy_order(buy_order_id)
+from steampy.client import SteamClient
+
+with SteamClient('MY_API_KEY', 'MY_USERNAME', 'MY_PASSWORD', 'PATH_TO_STEAMGUARD_FILE') as client:
+    buy_order_id = "some_buy_order_id"
+    response = client.market.cancel_buy_order(buy_order_id)
 ```
 
 Currencies
@@ -573,29 +658,43 @@ If none timestamp provided, timestamp will be set to current time.
 Generate mobile device confirmation key for accepting trade offer. 
 Default timestamp is current time.
 
-SteamChat methods
-==============
 
-**send_message(steamid_64: str, text: str) -> requests.Response**
+Utils methods
+======================
 
-Send the string contained in `text` to the desired `steamid_64`.
+**calculate_gross_price(price_net: Decimal, publisher_fee: Decimal, steam_fee: Decimal = Decimal('0.05')) -> Decimal:**
 
-`client.chat.send_message("[steamid]", "This is a message.")`
+Calculate the price including the publisher's fee and the Steam fee. Most publishers have a `10%` fee with a minimum 
+fee of `$0.01`. The Steam fee is currently `5%` (with a minimum fee of `$0.01`) and may be increased or decreased by 
+Steam in the future.
 
-**fetch_messages() -> dict**
+Returns the amount that the buyer pays during a market transaction:
 
-Returns a dictionary with all new sent and received messages:
+```python
+from decimal import Decimal
+from steampy.utils import calculate_gross_price
 
+publisher_fee = Decimal('0.1')  # 10%
+
+calculate_gross_price(Decimal('100'), publisher_fee)     # returns Decimal('115')
 ```
-{
-    'sent': [
-        {'partner': "[steamid]", 'message': "This is a message."}
-    ],
-    'received': []
-}
-```
 
-`client.chat.fetch_messages()`
+**calculate_net_price(price_gross: Decimal, publisher_fee: Decimal, steam_fee: Decimal = Decimal('0.05')) -> Decimal:**
+
+Calculate the price without the publisher's fee and the Steam fee. Most publishers have a `10%` fee with a minimum fee 
+of `$0.01`. The Steam fee is currently `5%` (with a minimum fee of `$0.01`) and may be increased or decreased by Steam 
+in the future.
+
+Returns the amount that the seller receives after a market transaction:
+
+```python
+from decimal import Decimal
+from steampy.utils import calculate_net_price
+
+publisher_fee = Decimal('0.1')  # 10%
+
+calculate_net_price(Decimal('115'), publisher_fee)     # returns Decimal('100')
+```
 
 Test
 ====
@@ -615,7 +714,7 @@ In some tests you also have to obtain `transaction_id`.
 You can do it by `SteamClient.get_trade_offers` or by logging manually into steam account in browser and get it from url
 
 In some tests you also have to obtain partner steam id.
-You can do it by by logging manually into steam account in browser and get it from url
+You can do it by logging manually into steam account in browser and get it from url
 
 License
 =======

@@ -1,10 +1,10 @@
 from setuptools import setup
 import sys
 
-if not sys.version_info[0] == 3 and sys.version_info[1] < 5:
-    sys.exit('Python < 3.5 is not supported')
+if not sys.version_info[0] == 3 and sys.version_info[1] < 8:
+    sys.exit('Python < 3.8 is not supported')
 
-version = '0.80'
+version = '1.0.3'
 
 setup(
     name='steampy',
