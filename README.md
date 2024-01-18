@@ -70,7 +70,7 @@ User can also provide login_cookies from browser to log in by cookies.
 from steampy.client import SteamClient
 
 login_cookies = {} # provide dict with cookies
-steam_client = SteamClient('MY_API_KEY',login_cookies=login_cookies)
+steam_client = SteamClient('MY_API_KEY',username='MY_USERNAME',login_cookies=login_cookies)
 assert steam_client.was_login_executed
 ```
 
@@ -148,7 +148,7 @@ Set login cookies, can be used instead of normal `login` method.
 from steampy.client import SteamClient
 
 login_cookies = {} # provide dict with cookies
-steam_client = SteamClient('MY_API_KEY',login_cookies=login_cookies)
+steam_client = SteamClient('MY_API_KEY',username='MY_USERNAME',login_cookies=login_cookies)
 assert steam_client.was_login_executed
 ```
 
@@ -440,10 +440,11 @@ Inventory items can be merged like in `SteamClient.get_my_inventory` method
 
 `Count` parameter is default max number of items, that can be fetched.
 
-**get_wallet_balance(convert_to_float: bool = True) -> Union[str, float]**
+**get_wallet_balance(convert_to_decimal: bool = True, on_hold: bool = False) -> Union[str, float]**
 
-Check account balance of steam acccount. It uses `parse_price` method from utils
-to covnert money string to Decimal if `convert_to_decimal` is set to `True`.
+Check account balance of steam acccount. It converts money string to Decimal if `convert_to_decimal` is set to `True`, 
+otherwise, it will return the value string without a decimal point.
+If the `on_hold` parameter is set to `True`, it will return the current on-hold balance value.
 
 Example:
 ```python
@@ -451,7 +452,9 @@ from steampy.client import SteamClient
 from decimal import Decimal 
 with SteamClient('MY_API_KEY', 'MY_USERNAME', 'MY_PASSWORD', 'PATH_TO_STEAMGUARD_FILE') as client:
             wallet_balance = client.get_wallet_balance()
+            on_hold_wallet_balance = client.get_wallet_balance(on_hold = True)
             assert type(wallet_balance) == Decimal
+            assert type(on_hold_wallet_balance) == Decimal
 ```
 
 market methods
