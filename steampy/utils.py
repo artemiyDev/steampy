@@ -215,7 +215,6 @@ def get_buy_orders_from_node(node: Tag) -> dict:
             'quantity': int(qnt_price_raw[0].strip()),
             'price': qnt_price_raw[1].strip(),
             'item_name': order.a.text,
-            'icon_url': order.select('img[class=market_listing_item_img]')[0].attrs['src'].rsplit('/', 2)[-2],
             'game_name': order.select('span[class=market_listing_game_name]')[0].text,
         }
         buy_orders_dict[order['order_id']] = order
