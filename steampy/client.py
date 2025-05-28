@@ -164,13 +164,13 @@ class SteamClient:
         return msg in response.text
 
     @login_required
-    def get_my_inventory(self, game: GameOptions, merge: bool = True, count: int = 5000) -> dict:
+    def get_my_inventory(self, game: GameOptions, merge: bool = True, count: int = 1000) -> dict:
         steam_id = self.steam_guard['steamid']
         return self.get_partner_inventory(steam_id, game, merge, count)
 
     @login_required
     def get_partner_inventory(
-        self, partner_steam_id: str, game: GameOptions, merge: bool = True, count: int = 5000
+        self, partner_steam_id: str, game: GameOptions, merge: bool = True, count: int = 1000
     ) -> dict:
         url = '/'.join((SteamUrl.COMMUNITY_URL, 'inventory', partner_steam_id, game.app_id, game.context_id))
         params = {'l': 'english', 'count': count}
