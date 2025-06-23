@@ -31,7 +31,7 @@ class SteamMarket:
         self.was_login_executed = True
 
     def fetch_price(
-        self, item_hash_name: str, game: GameOptions, currency: Currency = Currency.USD, country='PL'
+        self, item_hash_name: str, game: GameOptions, currency: Currency = Currency.USD, country='TR'
     ) -> dict:
         url = f'{SteamUrl.COMMUNITY_URL}/market/priceoverview/'
         params = {
@@ -50,7 +50,7 @@ class SteamMarket:
     @login_required
     def fetch_price_history(self, item_hash_name: str, game: GameOptions) -> dict:
         url = f'{SteamUrl.COMMUNITY_URL}/market/pricehistory/'
-        params = {'country': 'PL', 'appid': game.app_id, 'market_hash_name': item_hash_name}
+        params = {'country': 'TR', 'appid': game.app_id, 'market_hash_name': item_hash_name}
 
         response = self._session.get(url, params=params)
         if response.status_code == HTTPStatus.TOO_MANY_REQUESTS:
@@ -59,13 +59,11 @@ class SteamMarket:
         return response.json()
 
     @login_required
-    def get_my_market_listings(self) -> dict:
-        response = self._session.get(f'{SteamUrl.COMMUNITY_URL}/market')
+    def get_my_market_listings(self, language: str = 'english') -> dict:
+        response = self._session.get(f'{SteamUrl.COMMUNITY_URL}/market?l={language}')
         if response.status_code != HTTPStatus.OK:
             raise ApiException(f'There was a problem getting the listings. HTTP code: {response.status_code}')
 
-        # assets_descriptions = json.loads(text_between(response.text, 'var g_rgAssets = ', ';\r\n'))
-        # assets_descriptions = json.loads(text_between(response.text, 'var g_rgAssets = ', ';'))
         assets_descriptions = json.loads(text_between(response.text, "var g_rgAssets = ", ";\n"))
         listing_id_to_assets_address = get_listing_id_to_assets_address_from_html(response.text)
         listings = get_market_listings_from_html(response.text)
@@ -77,16 +75,14 @@ class SteamMarket:
             n_showing = int(text_between(response.text, '<span id="tabContentsMyActiveMarketListings_end">', '</span>'))
             n_total = int(
                 text_between(response.text, '<span id="tabContentsMyActiveMarketListings_total">', '</span>').replace(
-                    ',', ''
-                )
+                    ',', '')
             )
 
             if n_showing < n_total < 1000:
-                url = f'{SteamUrl.COMMUNITY_URL}/market/mylistings/render/?query=&start={n_showing}&count={-1}'
+                url = f'{SteamUrl.COMMUNITY_URL}/market/mylistings/render/?query=&start={n_showing}&count={-1}&l={language}'
                 response = self._session.get(url)
                 if response.status_code != HTTPStatus.OK:
                     raise ApiException(f'There was a problem getting the listings. HTTP code: {response.status_code}')
-
                 jresp = response.json()
                 listing_id_to_assets_address = get_listing_id_to_assets_address_from_html(jresp.get('hovers'))
                 listings_2 = get_market_sell_listings_from_api(jresp.get('results_html'))
@@ -96,7 +92,7 @@ class SteamMarket:
                 listings['sell_listings'] = {**listings['sell_listings'], **listings_2['sell_listings']}
             else:
                 for i in range(0, n_total, 100):
-                    url = f'{SteamUrl.COMMUNITY_URL}/market/mylistings/?query=&start={n_showing + i}&count={100}'
+                    url = f'{SteamUrl.COMMUNITY_URL}/market/mylistings/?query=&start={n_showing + i}&count=100&l={language}'
                     response = self._session.get(url)
                     if response.status_code != HTTPStatus.OK:
                         raise ApiException(
