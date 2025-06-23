@@ -121,6 +121,7 @@ class SteamMarket:
         headers = {'Referer': f'{SteamUrl.COMMUNITY_URL}/profiles/{self._steam_guard["steamid"]}/inventory'}
 
         response = self._session.post(f'{SteamUrl.COMMUNITY_URL}/market/sellitem/', data, headers=headers).json()
+        print(response)
         has_pending_confirmation = 'pending confirmation' in response.get('message', '')
         if response.get('needs_mobile_confirmation') or (not response.get('success') and has_pending_confirmation):
             return self._confirm_sell_listing(assetid)
