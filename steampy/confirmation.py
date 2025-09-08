@@ -13,9 +13,10 @@ from steampy.login import InvalidCredentials
 
 
 class Confirmation:
-    def __init__(self, data_confid, nonce):
+    def __init__(self, data_confid, nonce, creator_id):
         self.data_confid = data_confid
         self.nonce = nonce
+        self.creator_id = creator_id
 
 
 class Tag(enum.Enum):
@@ -40,6 +41,7 @@ class ConfirmationExecutor:
 
     def confirm_sell_listing(self, asset_id: str) -> dict:
         confirmations = self._get_confirmations()
+        print(confirmations)
         confirmation = self._select_sell_listing_confirmation(confirmations, asset_id)
         return self._send_confirmation(confirmation)
 
@@ -60,7 +62,8 @@ class ConfirmationExecutor:
             for conf in confirmations_json['conf']:
                 data_confid = conf['id']
                 nonce = conf['nonce']
-                confirmations.append(Confirmation(data_confid, nonce))
+                creator_id = conf['creator_id']
+                confirmations.append(Confirmation(data_confid, nonce, creator_id))
             return confirmations
         else:
             raise ConfirmationExpected
@@ -102,11 +105,15 @@ class ConfirmationExecutor:
         raise ConfirmationExpected
 
     def _select_sell_listing_confirmation(self, confirmations: List[Confirmation], asset_id: str) -> Confirmation:
+        print(confirmations)
         for confirmation in confirmations:
             confirmation_details_page = self._fetch_confirmation_details_page(confirmation)
             confirmation_id = self._get_confirmation_sell_listing_id(confirmation_details_page)
             if confirmation_id == asset_id:
                 return confirmation
+            else:
+                print('Different confirmation exceprion. Accepting confirmation')
+                self._send_confirmation(confirmation)
         raise ConfirmationExpected
 
     @staticmethod
@@ -122,3 +129,16 @@ class ConfirmationExecutor:
         soup = BeautifulSoup(confirmation_details_page, 'html.parser')
         full_offer_id = soup.select('.tradeoffer')[0]['id']
         return full_offer_id.split('_')[1]
+
+    def confirm_by_id(self, confirmation_id: str) -> bool:
+        """
+        Confirm a trade/order based on confirmation_id
+        """
+
+        confirmations = self._get_confirmations()
+        for conf in confirmations:
+            print(f"data_confid: {conf.data_confid}, creator_id: {conf.creator_id}")
+        if str(conf.creator_id) == str(confirmation_id):
+            result = self._send_confirmation(conf)
+        print(result)
+        return result.get("success", False)
