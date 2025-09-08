@@ -2,6 +2,8 @@ import json
 import urllib.parse
 from decimal import Decimal
 from http import HTTPStatus
+import time
+import random
 
 from requests import Session
 
@@ -31,7 +33,7 @@ class SteamMarket:
         self.was_login_executed = True
 
     def fetch_price(
-        self, item_hash_name: str, game: GameOptions, currency: Currency = Currency.USD, country='TR'
+            self, item_hash_name: str, game: GameOptions, currency: Currency = Currency.USD, country='TR'
     ) -> dict:
         url = f'{SteamUrl.COMMUNITY_URL}/market/priceoverview/'
         params = {
@@ -130,12 +132,12 @@ class SteamMarket:
 
     @login_required
     def create_buy_order(
-        self,
-        market_name: str,
-        price_single_item: str,
-        quantity: int,
-        game: GameOptions,
-        currency: Currency = Currency.USD,
+            self,
+            market_name: str,
+            price_single_item: str,
+            quantity: int,
+            game: GameOptions,
+            currency: Currency = Currency.USD,
     ) -> dict:
         data = {
             'sessionid': self._session_id,
@@ -144,6 +146,7 @@ class SteamMarket:
             'market_hash_name': market_name,
             'price_total': str(Decimal(price_single_item) * Decimal(quantity)),
             'quantity': quantity,
+            "confirmation": 0  # initial value is 0
         }
         headers = {
             'Referer': f'{SteamUrl.COMMUNITY_URL}/market/listings/{game.app_id}/{urllib.parse.quote(market_name)}'
@@ -151,22 +154,62 @@ class SteamMarket:
 
         response = self._session.post(f'{SteamUrl.COMMUNITY_URL}/market/createbuyorder/', data, headers=headers).json()
 
-        if (success := response.get('success')) != 1:
-            raise ApiException(
-                f'There was a problem creating the order. Are you using the right currency? success: {success}'
-            )
+        print("First order response:", response)
 
-        return response
+        if response.get("success") == 1:
+            return response
+        # If mobile confirmation is required
+        if response.get("need_confirmation"):
+            if not self._steam_guard:
+                raise ApiException("Order requires mobile confirmation, but steam_guard info is not provided")
+
+            confirmation_id = response["confirmation"]["confirmation_id"]
+            print("Confirmation required, ID:", confirmation_id)
+
+            # Execute mobile confirmation
+            confirmation_executor = ConfirmationExecutor(
+                self._steam_guard['identity_secret'],
+                self._steam_guard['steamid'],
+                self._session
+            )
+            time.sleep(random.uniform(2, 4))
+            success = confirmation_executor.confirm_by_id(confirmation_id)
+            if not success:
+                raise ApiException("Mobile confirmation failed")
+
+            print("✅ Mobile confirmation succeeded, resending request with confirmation ID")
+
+            # Second request, update confirmation to the confirmed ID
+            data["confirmation"] = confirmation_id
+            time.sleep(random.uniform(2, 4))
+            response = self._session.post(
+                SteamUrl.COMMUNITY_URL + "/market/createbuyorder/",
+                data,
+                headers=headers
+            ).json()
+            print("Second order response:", response)
+
+            if response.get("success") == 1:
+                print("✅ Buy order effective")
+                return response
+            else:
+                raise ApiException(f"Order failed after confirmation: {response}")
+        # if (success := response.get('success')) != 1:
+        #     raise ApiException(
+        #         f'There was a problem creating the order. Are you using the right currency? success: {success}'
+        #     )
+        #
+        # return response
 
     @login_required
     def buy_item(
-        self,
-        market_name: str,
-        market_id: str,
-        price: int,
-        fee: int,
-        game: GameOptions,
-        currency: Currency = Currency.USD,
+            self,
+            market_name: str,
+            market_id: str,
+            price: int,
+            fee: int,
+            game: GameOptions,
+            currency: Currency = Currency.USD,
     ) -> dict:
         data = {
             'sessionid': self._session_id,
