@@ -40,6 +40,7 @@ class ConfirmationExecutor:
         return self._send_confirmation(confirmation)
 
     def confirm_sell_listing(self, asset_id: str) -> dict:
+        time.sleep(1)
         confirmations = self._get_confirmations()
         print(confirmations)
         confirmation = self._select_sell_listing_confirmation(confirmations, asset_id)
@@ -142,3 +143,4 @@ class ConfirmationExecutor:
             result = self._send_confirmation(conf)
         print(result)
         return result.get("success", False)
+        return False
