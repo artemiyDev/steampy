@@ -138,9 +138,11 @@ Skipped tests are existing integration tests that require real Steam secrets/env
 
 ### `steampy/client.py`
 - Added optional constructor argument `refresh_token`.
+- Added optional constructor argument `steam_id` for cookies-first initialization.
 - `login()` now passes stored refresh token into `LoginExecutor`.
 - After successful login/refresh, client stores possibly rotated token from executor.
 - Added `get_refresh_token()` helper to retrieve the current refresh token for persistence.
+- `set_login_cookies(...)` now uses `steam_id` from constructor (if provided) and avoids HTML parsing dependency.
 
 ## 9) Network Retries for Proxy and Connector Errors
 

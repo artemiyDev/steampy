@@ -25,6 +25,15 @@ class DummyResponse:
 
 
 class TestSteamClientUnit(TestCase):
+    def test_set_login_cookies_uses_constructor_steam_id(self):
+        with patch.object(SteamClient, 'get_steam_id', side_effect=AssertionError('should not be called')):
+            client = SteamClient(
+                'api-key',
+                steam_id='76561198000000000',
+                login_cookies={'sessionid': 'sid', 'steamLoginSecure': 'x'},
+            )
+        self.assertEqual(client.steam_guard['steamid'], '76561198000000000')
+
     def test_filter_non_active_offers_keeps_only_active(self):
         payload = {
             'response': {

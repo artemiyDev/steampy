@@ -45,6 +45,7 @@ class SteamClient:
         username: str = None,
         password: str = None,
         steam_guard: str = None,
+        steam_id: str = None,
         refresh_token: str = None,
         login_cookies: dict = None,
         proxies: dict = None,
@@ -63,6 +64,7 @@ class SteamClient:
         self.was_login_executed = False
         self.username = username
         self._password = password
+        self._steam_id = steam_id
         self._refresh_token = refresh_token
         self.market = SteamMarket(self._session)
 
@@ -134,7 +136,10 @@ class SteamClient:
         self.was_login_executed = True
 
         if self.steam_guard is None:
-            self.steam_guard = {'steamid': str(self.get_steam_id())}
+            if self._steam_id:
+                self.steam_guard = {'steamid': str(self._steam_id)}
+            else:
+                self.steam_guard = {'steamid': str(self.get_steam_id())}
 
         self.market._set_login_executed(self.steam_guard, self._get_session_id())
 

@@ -51,11 +51,12 @@ Usage
 [Obtaining SteamGuard using Android emulation]( https://github.com/codepath/android_guides/wiki/Genymotion-2.0-Emulators-with-Google-Play-support)
 
 ** __init__(self, api_key: str, username: str = None, password: str = None, steam_guard: str = None,
-                 refresh_token: str = None, login_cookies: dict = None, proxies: dict = None) -> None:**
+                 steam_id: str = None, refresh_token: str = None, login_cookies: dict = None, proxies: dict = None) -> None:**
 
 
 SteamClient needs at least api_key to provide some functionalities. User can also provide username, password
 and SteamGuard file to be able to log in and use more methods. Proxies and refresh-token session restore are also supported.
+If you work with cookies-only auth, you can pass `steam_id` to skip steam id parsing from HTML.
 
 ```python
 from steampy.client import SteamClient
