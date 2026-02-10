@@ -12,10 +12,11 @@ from steampy.models import TradeOfferState
 
 
 class DummyResponse:
-    def __init__(self, status_code=200, json_data=None, text=''):
+    def __init__(self, status_code=200, json_data=None, text='', url=''):
         self.status_code = status_code
         self._json_data = json_data
         self.text = text
+        self.url = url
         self.content = text.encode('utf-8')
 
     def json(self):
@@ -50,14 +51,13 @@ class TestSteamClientUnit(TestCase):
     @patch('steampy.client.LoginExecutor')
     def test_login_allows_refresh_token_only_mode(self, mocked_login_executor_cls):
         client = SteamClient('api-key', refresh_token='refresh-token')
-        client._session.cookies.set('sessionid', 'sid', domain='steamcommunity.com', path='/')
-        client._session.cookies.set(
-            'steamLoginSecure', '76561198012345678%7C%7Cjwt-token', domain='steamcommunity.com', path='/'
-        )
 
         mocked_executor = mocked_login_executor_cls.return_value
         mocked_executor.refresh_token = 'refresh-token-2'
-        mocked_executor.login = MagicMock()
+        mocked_executor.login = MagicMock(
+            side_effect=lambda: client._session.cookies.set('sessionid', 'sid-new', domain='steamcommunity.com', path='/')
+        )
+        client._fetch_steam_id_from_community_page = MagicMock(return_value='76561198012345678')
 
         client.login()
 
@@ -148,3 +148,40 @@ class TestSteamClientUnit(TestCase):
 
         self.assertIs(response, expected_response)
         self.assertEqual(client._session.request.call_count, 3)
+
+    def test_clear_auth_cookies_removes_steam_auth_entries(self):
+        client = SteamClient('api-key')
+        client._session.cookies.set('sessionid', 'sid1', domain='steamcommunity.com', path='/')
+        client._session.cookies.set('steamLoginSecure', 'token', domain='steamcommunity.com', path='/')
+        client._session.cookies.set('some_other_cookie', 'value', domain='steamcommunity.com', path='/')
+
+        client._clear_auth_cookies()
+
+        self.assertNotIn('sessionid', client._session.cookies.get_dict(domain='steamcommunity.com', path='/'))
+        self.assertNotIn('steamLoginSecure', client._session.cookies.get_dict(domain='steamcommunity.com', path='/'))
+        self.assertIn('some_other_cookie', client._session.cookies.get_dict(domain='steamcommunity.com', path='/'))
+
+    def test_is_session_alive_true_without_username_by_steamid_marker(self):
+        client = SteamClient('api-key')
+        client.was_login_executed = True
+        client._request = MagicMock(
+            side_effect=[
+                DummyResponse(status_code=200, text='account page', url='https://store.steampowered.com/account/'),
+                DummyResponse(
+                    status_code=200,
+                    text='var g_steamID = "76561198012345678";',
+                    url='https://steamcommunity.com/',
+                ),
+            ]
+        )
+
+        self.assertTrue(client.is_session_alive())
+
+    def test_is_session_alive_false_on_store_login_redirect(self):
+        client = SteamClient('api-key')
+        client.was_login_executed = True
+        client._request = MagicMock(
+            return_value=DummyResponse(status_code=200, text='login page', url='https://store.steampowered.com/login/')
+        )
+
+        self.assertFalse(client.is_session_alive())

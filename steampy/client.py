@@ -146,6 +146,16 @@ class SteamClient:
             updated_guard['identity_secret'] = self._identity_secret
         self.steam_guard = updated_guard
 
+    def _clear_auth_cookies(self) -> None:
+        auth_cookie_names = {'sessionid', 'steamLoginSecure', 'steamRefresh_steam', 'steamCountry', 'steamRememberLogin'}
+        cookies_to_clear = [cookie for cookie in self._session.cookies if cookie.name in auth_cookie_names]
+        for cookie in cookies_to_clear:
+            try:
+                self._session.cookies.clear(domain=cookie.domain, path=cookie.path, name=cookie.name)
+            except KeyError:
+                # If a cookie cannot be removed by exact domain/path, continue and let login overwrite it.
+                continue
+
     def set_proxies(self, proxies: dict) -> dict:
         if not isinstance(proxies, dict):
             raise TypeError(
@@ -211,6 +221,8 @@ class SteamClient:
         if self.was_login_executed and self.is_session_alive():
             return
 
+        # Old auth cookies may conflict with refresh/cookie rotation. Start login from a clean auth state.
+        self._clear_auth_cookies()
         self._session.cookies.set('steamRememberLogin', 'true')
         login_executor = LoginExecutor(
             self.username,
@@ -263,8 +275,24 @@ class SteamClient:
 
     @login_required
     def is_session_alive(self) -> bool:
-        main_page_response = self._request('GET', SteamUrl.COMMUNITY_URL)
-        return bool(self.username) and self.username.lower() in main_page_response.text.lower()
+        # Account page redirect to login is a reliable signal that session is dead.
+        store_account_response = self._request('GET', f'{SteamUrl.STORE_URL}/account/')
+        store_url = (getattr(store_account_response, 'url', '') or '').lower()
+        if '/login' in store_url:
+            return False
+
+        # Community page usually contains g_steamID script variable when authenticated.
+        community_response = self._request('GET', SteamUrl.COMMUNITY_URL)
+        community_url = (getattr(community_response, 'url', '') or '').lower()
+        if '/login' in community_url:
+            return False
+        if re.search(r'g_steamID = "(\d+)";', community_response.text):
+            return True
+
+        if self.username:
+            return self.username.lower() in community_response.text.lower()
+
+        return store_account_response.status_code == 200
 
     def get_refresh_token(self) -> Optional[str]:
         return self._refresh_token
