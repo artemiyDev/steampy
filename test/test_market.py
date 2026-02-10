@@ -2,6 +2,7 @@ import os
 from unittest import TestCase
 import unittest
 
+from steampy import guard
 from steampy.client import SteamClient
 from steampy.exceptions import TooManyRequests
 from steampy.models import GameOptions, Currency
@@ -14,6 +15,10 @@ class TestMarket(TestCase):
         cls.credentials = load_credentials()[0]
         dirname = os.path.dirname(os.path.abspath(__file__))
         cls.steam_guard_file = f'{dirname}/../secrets/Steamguard.txt'
+        steam_guard_data = guard.load_steam_guard(cls.steam_guard_file)
+        cls.shared_secret = steam_guard_data['shared_secret']
+        cls.identity_secret = steam_guard_data['identity_secret']
+        cls.steam_id = steam_guard_data['steamid']
 
     def test_get_price(self):
         client = SteamClient(self.credentials.api_key)
@@ -28,13 +33,11 @@ class TestMarket(TestCase):
                 client.market.fetch_price(item, GameOptions.CS)
 
         client = SteamClient(self.credentials.api_key)
-        client.login(self.credentials.login, self.credentials.password, self.steam_guard_file)
+        client.login(self.credentials.login, self.credentials.password, self.shared_secret, self.steam_id, self.identity_secret)
         self.assertRaises(TooManyRequests, request_loop)
 
     def test_get_price_history(self):
-        with SteamClient(
-            self.credentials.api_key, self.credentials.login, self.credentials.password, self.steam_guard_file
-        ) as client:
+        with SteamClient(self.credentials.api_key, self.credentials.login, self.credentials.password, steam_id=self.steam_id, shared_secret=self.shared_secret, identity_secret=self.identity_secret) as client:
             item = 'M4A1-S | Cyrex (Factory New)'
             response = client.market.fetch_price_history(item, GameOptions.CS)
             self.assertTrue(response['success'])
@@ -42,7 +45,7 @@ class TestMarket(TestCase):
 
     def test_get_all_listings_from_market(self):
         client = SteamClient(self.credentials.api_key)
-        client.login(self.credentials.login, self.credentials.password, self.steam_guard_file)
+        client.login(self.credentials.login, self.credentials.password, self.shared_secret, self.steam_id, self.identity_secret)
         listings = client.market.get_my_market_listings()
         self.assertEqual(len(listings), 2)
         self.assertEqual(len(listings.get('buy_orders')), 1)
@@ -51,7 +54,7 @@ class TestMarket(TestCase):
 
     def test_create_and_remove_sell_listing(self):
         client = SteamClient(self.credentials.api_key)
-        client.login(self.credentials.login, self.credentials.password, self.steam_guard_file)
+        client.login(self.credentials.login, self.credentials.password, self.shared_secret, self.steam_id, self.identity_secret)
         game = GameOptions.DOTA2
         inventory = client.get_my_inventory(game)
         asset_id_to_sell = None
@@ -73,7 +76,7 @@ class TestMarket(TestCase):
 
     def test_create_and_cancel_buy_order(self):
         client = SteamClient(self.credentials.api_key)
-        client.login(self.credentials.login, self.credentials.password, self.steam_guard_file)
+        client.login(self.credentials.login, self.credentials.password, self.shared_secret, self.steam_id, self.identity_secret)
         # PUT THE REAL CURRENCY OF YOUR STEAM WALLET, OTHER CURRENCIES WON'T WORK
         response = client.market.create_buy_order(
             'AK-47 | Redline (Field-Tested)', '10.34', 2, GameOptions.CS, Currency.EURO
@@ -83,3 +86,4 @@ class TestMarket(TestCase):
         self.assertIsNotNone(buy_order_id)
         response = client.market.cancel_buy_order(buy_order_id)
         self.assertTrue(response['success'])
+

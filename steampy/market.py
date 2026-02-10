@@ -159,6 +159,9 @@ class SteamMarket:
 
     @login_required
     def create_sell_order(self, assetid: str, game: GameOptions, money_to_receive: str) -> dict:
+        if not self._steam_guard or not self._steam_guard.get('steamid'):
+            raise ApiException('steam_id is required for creating sell orders')
+
         data = {
             'assetid': assetid,
             'sessionid': self._session_id,
@@ -208,7 +211,11 @@ class SteamMarket:
             raise ApiException(f'Order creation failed: {response_json}')
 
         if not self._steam_guard:
-            raise ApiException('Order requires mobile confirmation, but steam_guard info is not provided')
+            raise ApiException('Order requires mobile confirmation, but auth secrets are not provided')
+        if not self._steam_guard.get('identity_secret'):
+            raise ApiException('identity_secret is required for mobile confirmation')
+        if not self._steam_guard.get('steamid'):
+            raise ApiException('steam_id is required for mobile confirmation')
 
         confirmation_data = response_json.get('confirmation', {})
         confirmation_id = confirmation_data.get('confirmation_id')
@@ -291,6 +298,13 @@ class SteamMarket:
         return response_json
 
     def _confirm_sell_listing(self, asset_id: str) -> dict:
+        if not self._steam_guard:
+            raise ApiException('Auth secrets are required for sell listing confirmation')
+        if not self._steam_guard.get('identity_secret'):
+            raise ApiException('identity_secret is required for sell listing confirmation')
+        if not self._steam_guard.get('steamid'):
+            raise ApiException('steam_id is required for sell listing confirmation')
+
         con_executor = ConfirmationExecutor(
             self._steam_guard['identity_secret'], self._steam_guard['steamid'], self._session
         )

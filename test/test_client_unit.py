@@ -34,6 +34,19 @@ class TestSteamClientUnit(TestCase):
             )
         self.assertEqual(client.steam_guard['steamid'], '76561198000000000')
 
+    def test_set_login_cookies_extracts_steam_id_from_steam_login_secure(self):
+        with patch.object(SteamClient, 'get_steam_id', side_effect=AssertionError('should not be called')):
+            client = SteamClient(
+                'api-key',
+                login_cookies={'sessionid': 'sid', 'steamLoginSecure': '76561198012345678%7C%7Cjwt-token'},
+            )
+        self.assertEqual(client.steam_guard['steamid'], '76561198012345678')
+
+    def test_login_requires_shared_secret_for_credentials_login(self):
+        client = SteamClient('api-key', username='user', password='pass')
+        with self.assertRaises(InvalidCredentials):
+            client.login()
+
     def test_filter_non_active_offers_keeps_only_active(self):
         payload = {
             'response': {

@@ -117,7 +117,7 @@
 - Executed:
   - `python -m unittest discover -s test -p "test_*.py"`
 - Result:
-  - `Ran 54 tests`
+  - `Ran 57 tests`
   - `OK (skipped=26)`
 
 Skipped tests are existing integration tests that require real Steam secrets/environment.
@@ -186,3 +186,27 @@ Skipped tests are existing integration tests that require real Steam secrets/env
   - `test/test_client_unit.py`: network retry in `_request(...)`, session-id fallback, unknown trade state handling, access-token extraction guard.
   - `test/test_login_unit.py`: explicit missing refresh-token failure in poll-session flow.
   - `test/test_utils.py`: proxy ping retry path and final `ProxyConnectionError`.
+
+## 10) Removed Steam Guard File Dependency in Client API
+
+### `steampy/client.py`
+- Reworked constructor to accept secrets directly:
+  - `steam_id`,
+  - `shared_secret`,
+  - `identity_secret`.
+- Removed dependency on `steam_guard` file/string parsing in `SteamClient`.
+- Reworked `login(...)` signature to use direct secrets:
+  - `login(username, password, shared_secret, steam_id=None, identity_secret=None)`.
+- Added sync helper to maintain internal credentials dict from constructor/login arguments.
+- Added steam-id extraction from `steamLoginSecure` cookie as fallback when using cookies-only flow.
+- Kept compatibility for downstream code by preserving `client.steam_guard` as a runtime dict built from provided secrets.
+- Added explicit validation errors for mobile-confirmation flows when `identity_secret` or `steam_id` is missing.
+
+### `steampy/market.py`
+- Improved guards for operations requiring confirmation:
+  - clear errors when `steam_id`/`identity_secret` are not present.
+
+### Tests
+- Added unit coverage for new constructor/login contract:
+  - steam id extraction from `steamLoginSecure`,
+  - enforcement that credentials login requires `shared_secret`.

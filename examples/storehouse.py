@@ -5,8 +5,12 @@ from steampy.client import SteamClient, TradeOfferState
 
 # Set API key
 api_key = ''
-# Set path to SteamGuard file
-steamguard_path = ''
+# Set Steam shared secret
+shared_secret = ''
+# Set Steam identity secret
+identity_secret = ''
+# Set SteamID64
+steam_id = ''
 # Steam username
 username = ''
 # Steam password
@@ -21,8 +25,8 @@ def main():
         print('Terminating bot...')
         return
 
-    client = SteamClient(api_key)
-    client.login(username, password, steamguard_path)
+    client = SteamClient(api_key, steam_id=steam_id, identity_secret=identity_secret)
+    client.login(username, password, shared_secret)
     print('Bot logged in successfully, fetching offers every 60 seconds')
 
     while True:
@@ -37,7 +41,7 @@ def main():
 
 
 def are_credentials_filled() -> bool:
-    return all((api_key, steamguard_path, username, password))
+    return all((api_key, shared_secret, identity_secret, steam_id, username, password))
 
 
 def is_donation(offer: dict) -> bool:

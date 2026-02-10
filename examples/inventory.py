@@ -7,8 +7,8 @@ from steampy.models import GameOptions
 # Your Steam username
 username = ''
 
-# Path to Steamguard file
-steam_guard_path = ''
+# Your Steam shared secret
+shared_secret = ''
 
 # Your Steam password
 password = ''
@@ -27,7 +27,7 @@ context_id = ''
 print('Logging in into Steam...')
 steam_client = SteamClient(steam_key)
 try:
-    steam_client.login(username, password, steam_guard_path)
+    steam_client.login(username, password, shared_secret)
 except (ValueError, InvalidCredentials):
     print('Your login credentials are invalid!')
     exit(1)

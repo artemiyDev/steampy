@@ -8,7 +8,7 @@ Donate bitcoin: 3PRzESHsTVkCFK7osjwFGQLZjSf7qXP1Ta
 `steampy` is a library for Python, inspired by node-steam-tradeoffers, node-steam and other libraries for Node.js.
 It was designed as a simple lightweight library, combining features of many steam libraries from Node.js into a single python module.
 `steampy` is capable of logging into steam, fetching trade offers and handling them in simple manner, using steam user credentials
-and SteamGuard file, or by passing sessionID and webCookie cookies. 
+and secrets (`shared_secret`, `identity_secret`), or by passing sessionID and webCookie cookies. 
 'steampy' is also capable of using proxies.
 `steampy` is developed with Python 3 using type hints and many other features its supported for Windows, Linux and MacOs.
 
@@ -50,19 +50,20 @@ Usage
 
 [Obtaining SteamGuard using Android emulation]( https://github.com/codepath/android_guides/wiki/Genymotion-2.0-Emulators-with-Google-Play-support)
 
-** __init__(self, api_key: str, username: str = None, password: str = None, steam_guard: str = None,
-                 steam_id: str = None, refresh_token: str = None, login_cookies: dict = None, proxies: dict = None) -> None:**
+** __init__(self, api_key: str, username: str = None, password: str = None, steam_id: str = None,
+                 shared_secret: str = None, identity_secret: str = None, refresh_token: str = None,
+                 login_cookies: dict = None, proxies: dict = None) -> None:**
 
 
 SteamClient needs at least api_key to provide some functionalities. User can also provide username, password
-and SteamGuard file to be able to log in and use more methods. Proxies and refresh-token session restore are also supported.
-If you work with cookies-only auth, you can pass `steam_id` to skip steam id parsing from HTML.
+and secrets to be able to log in and use more methods. Proxies and refresh-token session restore are also supported.
+If you work with cookies-only auth, pass `steam_id` to skip steam id parsing from HTML.
 
 ```python
 from steampy.client import SteamClient
 
 steam_client = SteamClient('MY_API_KEY')
-steam_client.login('MY_USERNAME', 'MY_PASSWORD', 'PATH_TO_STEAMGUARD_FILE')
+steam_client.login('MY_USERNAME', 'MY_PASSWORD', 'MY_SHARED_SECRET')
 ```
 
 User can also provide login_cookies from browser to log in by cookies.
@@ -85,7 +86,9 @@ steam_client = SteamClient(
     'MY_API_KEY',
     username='MY_USERNAME',
     password='MY_PASSWORD',
-    steam_guard='PATH_TO_STEAMGUARD_FILE',
+    shared_secret='MY_SHARED_SECRET',
+    identity_secret='MY_IDENTITY_SECRET',
+    steam_id='MY_STEAM_ID_64',
     refresh_token=saved_refresh_token,
 )
 steam_client.login()
@@ -108,19 +111,20 @@ steam_client = SteamClient('MY_API_KEY', proxies=proxies)
 
 
 
-If you have `steamid`, `shared_secret` and `identity_secret` you can place it in file `Steamguard.txt` instead of fetching SteamGuard file from device.
+If you already have `steamid`, `shared_secret` and `identity_secret`, pass them directly to constructor.
 ```python
-{
-    "steamid": "YOUR_STEAM_ID_64",
-    "shared_secret": "YOUR_SHARED_SECRET",
-    "identity_secret": "YOUR_IDENTITY_SECRET"
-}
+steam_client = SteamClient(
+    'MY_API_KEY',
+    steam_id='YOUR_STEAM_ID_64',
+    shared_secret='YOUR_SHARED_SECRET',
+    identity_secret='YOUR_IDENTITY_SECRET',
+)
 ```
 
 Examples
 ========
 
-You'll need to obtain your API key and SteamGuard file in order to run the examples, 
+You'll need to obtain your API key and secrets in order to run the examples, 
 and then fill login and password in `storehose.py` file.
 The `storehouse.py` file contains an example of handling incoming trade offers.
 
@@ -170,7 +174,7 @@ steam_client = SteamClient('MY_API_KEY',username='MY_USERNAME',login_cookies=log
 assert steam_client.was_login_executed
 ```
 
-**login(username: str, password: str, steam_guard: str) -> requests.Response**
+**login(username: str, password: str, shared_secret: str, steam_id: str = None, identity_secret: str = None) -> requests.Response**
 
 Log into the steam account. Allows to accept trade offers and some other methods.
 
@@ -178,7 +182,7 @@ Log into the steam account. Allows to accept trade offers and some other methods
 from steampy.client import SteamClient
 
 steam_client = SteamClient('MY_API_KEY')
-steam_client.login('MY_USERNAME', 'MY_PASSWORD', 'PATH_TO_STEAMGUARD_FILE')
+steam_client.login('MY_USERNAME', 'MY_PASSWORD', 'MY_SHARED_SECRET')
 ```
 
 You can also use `with` statement to automatically login and logout.
@@ -186,7 +190,7 @@ You can also use `with` statement to automatically login and logout.
 ```python
 from steampy.client import SteamClient
 
-with SteamClient('MY_API_KEY', 'MY_USERNAME', 'MY_PASSWORD', 'PATH_TO_STEAMGUARD_FILE') as client:
+with SteamClient('MY_API_KEY', 'MY_USERNAME', 'MY_PASSWORD', shared_secret='MY_SHARED_SECRET') as client:
     client.some_method1(...)
     client.some_method2(...)
     ...
@@ -201,7 +205,7 @@ Logout from steam.
 from steampy.client import SteamClient
 
 steam_client = SteamClient('MY_API_KEY')
-steam_client.login('MY_USERNAME', 'MY_PASSWORD', 'PATH_TO_STEAMGUARD_FILE')
+steam_client.login('MY_USERNAME', 'MY_PASSWORD', 'MY_SHARED_SECRET')
 steam_client.logout()
 ```
 
@@ -210,7 +214,7 @@ You can also use `with` statement to automatically login and logout.
 ```python
 from steampy.client import SteamClient
 
-with SteamClient('MY_API_KEY', 'MY_USERNAME', 'MY_PASSWORD', 'PATH_TO_STEAMGUARD_FILE') as client:
+with SteamClient('MY_API_KEY', 'MY_USERNAME', 'MY_PASSWORD', shared_secret='MY_SHARED_SECRET') as client:
     client.some_method1(...)
     client.some_method2(...)
     ...
@@ -231,7 +235,7 @@ if user name is there. Thanks for vasia123 for this solution.
 from steampy.client import SteamClient
 
 steam_client = SteamClient('MY_API_KEY')
-steam_client.login('MY_USERNAME', 'MY_PASSWORD', 'PATH_TO_STEAMGUARD_FILE')
+steam_client.login('MY_USERNAME', 'MY_PASSWORD', 'MY_SHARED_SECRET')
 is_session_alive = steam_client.is_session_alive()
 ```
 
@@ -281,7 +285,7 @@ Do NOT store any item ids before you got the receipt since the ids may change.
 
 Using `SteamClient.login` method is required before usage
 `Asset` is class defined in `client.py`, you can obtain `asset_id` from `SteamClient.get_my_inventory` method.
-This method also uses identity secret from SteamGuard file to confirm the trade offer.
+This method also uses `identity_secret` to confirm the trade offer.
 No need to manually confirm it on mobile app or email.
 This method works when partner is your friend or steam.
 In returned dict there will be trade offer id by the key `tradeofferid`.
@@ -291,7 +295,7 @@ from steampy.client import SteamClient, Asset
 from steampy.utils import GameOptions
 
 steam_client = SteamClient('MY_API_KEY')
-steam_client.login('MY_USERNAME', 'MY_PASSWORD', 'PATH_TO_STEAMGUARD_FILE')
+steam_client.login('MY_USERNAME', 'MY_PASSWORD', 'MY_SHARED_SECRET')
 partner_id = 'PARTNER_ID'
 game = GameOptions.CS
 my_items = steam_client.get_my_inventory(game)
@@ -320,7 +324,7 @@ Check the escrow duration for trade between you and partner(given partner trade 
 **accept_trade_offer(trade_offer_id: str) -> dict**
 
 Using `SteamClient.login` method is required before usage
-This method also uses identity secret from SteamGuard file to confirm the trade offer.
+This method also uses `identity_secret` to confirm the trade offer.
 No need to manually confirm it on mobile app or email.
 
 **decline_trade_offer(trade_offer_id: str) -> dict**
@@ -473,7 +477,7 @@ Example:
 ```python
 from steampy.client import SteamClient
 from decimal import Decimal 
-with SteamClient('MY_API_KEY', 'MY_USERNAME', 'MY_PASSWORD', 'PATH_TO_STEAMGUARD_FILE') as client:
+with SteamClient('MY_API_KEY', 'MY_USERNAME', 'MY_PASSWORD', shared_secret='MY_SHARED_SECRET') as client:
             wallet_balance = client.get_wallet_balance()
             on_hold_wallet_balance = client.get_wallet_balance(on_hold = True)
             assert type(wallet_balance) == Decimal
@@ -513,7 +517,7 @@ Returns list of price history of and item.
 from steampy.client import SteamClient
 from steampy.models import GameOptions
 
-with SteamClient('MY_API_KEY', 'MY_USERNAME', 'MY_PASSWORD', 'PATH_TO_STEAMGUARD_FILE') as client:
+with SteamClient('MY_API_KEY', 'MY_USERNAME', 'MY_PASSWORD', shared_secret='MY_SHARED_SECRET') as client:
     item = 'M4A1-S | Cyrex (Factory New)'
     response = client.market.fetch_price_history(item, GameOptions.CS)
     response['prices'][0]
@@ -531,7 +535,7 @@ Returns market listings posted by user
 ```python
 from steampy.client import SteamClient
 
-with SteamClient('MY_API_KEY', 'MY_USERNAME', 'MY_PASSWORD', 'PATH_TO_STEAMGUARD_FILE') as client:
+with SteamClient('MY_API_KEY', 'MY_USERNAME', 'MY_PASSWORD', shared_secret='MY_SHARED_SECRET') as client:
     listings = client.market.get_my_market_listings()
 ```
 
@@ -546,7 +550,7 @@ Create sell order of the asset on the steam market.
 from steampy.client import SteamClient
 from steampy.models import GameOptions
 
-with SteamClient('MY_API_KEY', 'MY_USERNAME', 'MY_PASSWORD', 'PATH_TO_STEAMGUARD_FILE') as client:
+with SteamClient('MY_API_KEY', 'MY_USERNAME', 'MY_PASSWORD', shared_secret='MY_SHARED_SECRET') as client:
     asset_id_to_sell = 'some_asset_id'
     game = GameOptions.DOTA2
     sell_response = client.market.create_sell_order(asset_id_to_sell, game, "10000")
@@ -564,7 +568,7 @@ Create buy order of the assets on the steam market.
 from steampy.client import SteamClient
 from steampy.models import GameOptions, Currency
 
-with SteamClient('MY_API_KEY', 'MY_USERNAME', 'MY_PASSWORD', 'PATH_TO_STEAMGUARD_FILE') as client:
+with SteamClient('MY_API_KEY', 'MY_USERNAME', 'MY_PASSWORD', shared_secret='MY_SHARED_SECRET') as client:
     response = client.market.create_buy_order("AK-47 | Redline (Field-Tested)", "1034", 2, GameOptions.CS, Currency.EURO)
     buy_order_id = response["buy_orderid"]
 ```
@@ -580,7 +584,7 @@ Buy a certain item from market listing.
 from steampy.client import SteamClient
 from steampy.models import Currency, GameOptions
 
-with SteamClient('MY_API_KEY', 'MY_USERNAME', 'MY_PASSWORD', 'PATH_TO_STEAMGUARD_FILE') as client:
+with SteamClient('MY_API_KEY', 'MY_USERNAME', 'MY_PASSWORD', shared_secret='MY_SHARED_SECRET') as client:
     response = client.market.buy_item('AK-47 | Redline (Field-Tested)', '1942659007774983251', 81, 10,
                                         GameOptions.CS, Currency.RUB)
     wallet_balance = response["wallet_info"]["wallet_balance"]
@@ -595,7 +599,7 @@ Cancel previously requested sell order on steam market.
 ```python
 from steampy.client import SteamClient
 
-with SteamClient('MY_API_KEY', 'MY_USERNAME', 'MY_PASSWORD', 'PATH_TO_STEAMGUARD_FILE') as client:
+with SteamClient('MY_API_KEY', 'MY_USERNAME', 'MY_PASSWORD', shared_secret='MY_SHARED_SECRET') as client:
     sell_order_id = "some_sell_order_id"
     response = client.market.cancel_sell_order(sell_order_id)
 ```
@@ -609,7 +613,7 @@ Cancel previously requested buy order on steam market.
 ```python
 from steampy.client import SteamClient
 
-with SteamClient('MY_API_KEY', 'MY_USERNAME', 'MY_PASSWORD', 'PATH_TO_STEAMGUARD_FILE') as client:
+with SteamClient('MY_API_KEY', 'MY_USERNAME', 'MY_PASSWORD', shared_secret='MY_SHARED_SECRET') as client:
     buy_order_id = "some_buy_order_id"
     response = client.market.cancel_buy_order(buy_order_id)
 ```
@@ -676,7 +680,7 @@ If `steam_guard` is file name then load and parse it, else just parse `steam_gua
 
 **generate_one_time_code(shared_secret: str, timestamp: int = None) -> str**
 
-Generate one time code for logging into Steam using shared_secret from SteamGuard file.
+Generate one time code for logging into Steam using `shared_secret`.
 If none timestamp provided, timestamp will be set to current time.
 
 **generate_confirmation_key(identity_secret: str, tag: str, timestamp: int = int(time.time())) -> bytes**
@@ -727,7 +731,7 @@ Test
 
 All public methods are documented and tested. 
 `guard` module has unit tests, `client` uses an acceptance test.
-For the acceptance test you have to put `credentials.pwd` and `Steamguard` file into `test` directory
+For the acceptance test you have to put `credentials.pwd` into `test` directory and pass secrets directly in tests.
 
 Example `credentials.pwd` file:
 
@@ -766,3 +770,4 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+

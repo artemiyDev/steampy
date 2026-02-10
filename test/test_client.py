@@ -3,6 +3,7 @@ from decimal import Decimal
 from unittest import TestCase
 import unittest
 
+from steampy import guard
 from steampy.client import SteamClient
 from steampy.exceptions import LoginRequired
 from steampy.models import GameOptions, Asset
@@ -15,36 +16,38 @@ class TestSteamClient(TestCase):
         cls.credentials = load_credentials()[0]
         dirname = os.path.dirname(os.path.abspath(__file__))
         cls.steam_guard_file = f'{dirname}/../secrets/Steamguard.txt'
+        steam_guard_data = guard.load_steam_guard(cls.steam_guard_file)
+        cls.shared_secret = steam_guard_data['shared_secret']
+        cls.identity_secret = steam_guard_data['identity_secret']
+        cls.steam_id = steam_guard_data['steamid']
 
     def test_get_steam_id(self):
         client = SteamClient(self.credentials.api_key)
-        client.login(self.credentials.login, self.credentials.password, self.steam_guard_file)
+        client.login(self.credentials.login, self.credentials.password, self.shared_secret, self.steam_id, self.identity_secret)
         self.assertEqual(client.get_steam_id(), int(client.steam_guard['steamid']))
 
     def test_login(self):
         client = SteamClient(self.credentials.api_key)
-        client.login(self.credentials.login, self.credentials.password, self.steam_guard_file)
+        client.login(self.credentials.login, self.credentials.password, self.shared_secret, self.steam_id, self.identity_secret)
 
     def test_is_session_alive(self):
         client = SteamClient(self.credentials.api_key)
-        client.login(self.credentials.login, self.credentials.password, self.steam_guard_file)
+        client.login(self.credentials.login, self.credentials.password, self.shared_secret, self.steam_id, self.identity_secret)
         self.assertTrue(client.is_session_alive())
 
     def test_logout(self):
         client = SteamClient(self.credentials.api_key)
-        client.login(self.credentials.login, self.credentials.password, self.steam_guard_file)
+        client.login(self.credentials.login, self.credentials.password, self.shared_secret, self.steam_id, self.identity_secret)
         self.assertTrue(client.is_session_alive())
         client.logout()
 
     def test_client_with_statement(self):
-        with SteamClient(
-            self.credentials.api_key, self.credentials.login, self.credentials.password, self.steam_guard_file
-        ) as client:
+        with SteamClient(self.credentials.api_key, self.credentials.login, self.credentials.password, steam_id=self.steam_id, shared_secret=self.shared_secret, identity_secret=self.identity_secret) as client:
             self.assertTrue(client.is_session_alive())
 
     def test_send_offer_without_sessionid_cookie(self):
         client = SteamClient(self.credentials.api_key)
-        client.login(self.credentials.login, self.credentials.password, self.steam_guard_file)
+        client.login(self.credentials.login, self.credentials.password, self.shared_secret, self.steam_id, self.identity_secret)
         client._session.cookies.set('sessionid', None, domain='steamcommunity.com')
         cookies = client._session.cookies.get_dict('steamcommunity.com')
         self.assertNotIn('sessionid', cookies)
@@ -56,7 +59,7 @@ class TestSteamClient(TestCase):
 
     def test_sessionid_cookie(self):
         client = SteamClient(self.credentials.api_key)
-        client.login(self.credentials.login, self.credentials.password, self.steam_guard_file)
+        client.login(self.credentials.login, self.credentials.password, self.shared_secret, self.steam_id, self.identity_secret)
         community_cookies = client._session.cookies.get_dict('steamcommunity.com')
         store_cookies = client._session.cookies.get_dict('store.steampowered.com')
         self.assertIn('sessionid', community_cookies)
@@ -64,13 +67,13 @@ class TestSteamClient(TestCase):
 
     def test_get_my_inventory(self):
         client = SteamClient(self.credentials.api_key)
-        client.login(self.credentials.login, self.credentials.password, self.steam_guard_file)
+        client.login(self.credentials.login, self.credentials.password, self.shared_secret, self.steam_id, self.identity_secret)
         inventory = client.get_my_inventory(GameOptions.CS)
         self.assertIsNotNone(inventory)
 
     def test_get_partner_inventory(self):
         client = SteamClient(self.credentials.api_key)
-        client.login(self.credentials.login, self.credentials.password, self.steam_guard_file)
+        client.login(self.credentials.login, self.credentials.password, self.shared_secret, self.steam_id, self.identity_secret)
         partner_id = ''
         game = GameOptions.TF2
         inventory = client.get_partner_inventory(partner_id, game)
@@ -98,28 +101,28 @@ class TestSteamClient(TestCase):
 
     def test_accept_trade_offer(self):
         client = SteamClient(self.credentials.api_key)
-        client.login(self.credentials.login, self.credentials.password, self.steam_guard_file)
+        client.login(self.credentials.login, self.credentials.password, self.shared_secret, self.steam_id, self.identity_secret)
         trade_offer_id = '1451378159'
         response_dict = client.accept_trade_offer(trade_offer_id)
         self.assertIsNotNone(response_dict)
 
     def test_decline_trade_offer(self):
         client = SteamClient(self.credentials.api_key)
-        client.login(self.credentials.login, self.credentials.password, self.steam_guard_file)
+        client.login(self.credentials.login, self.credentials.password, self.shared_secret, self.steam_id, self.identity_secret)
         trade_offer_id = '1449530707'
         response_dict = client.decline_trade_offer(trade_offer_id)
         self.assertEqual(response_dict['response'], {})
 
     def test_cancel_trade_offer(self):
         client = SteamClient(self.credentials.api_key)
-        client.login(self.credentials.login, self.credentials.password, self.steam_guard_file)
+        client.login(self.credentials.login, self.credentials.password, self.shared_secret, self.steam_id, self.identity_secret)
         trade_offer_id = '1450637835'
         response_dict = client.cancel_trade_offer(trade_offer_id)
         self.assertEqual(response_dict['response'], {})
 
     def test_make_offer(self):
         client = SteamClient(self.credentials.api_key)
-        client.login(self.credentials.login, self.credentials.password, self.steam_guard_file)
+        client.login(self.credentials.login, self.credentials.password, self.shared_secret, self.steam_id, self.identity_secret)
         partner_id = ''
         game = GameOptions.CS
         my_items = client.get_my_inventory(game)
@@ -139,7 +142,7 @@ class TestSteamClient(TestCase):
             f'https://steamcommunity.com/tradeoffer/new/?partner={partner_account_id}&token={partner_token}'
         )
         client = SteamClient(self.credentials.api_key)
-        client.login(self.credentials.login, self.credentials.password, self.steam_guard_file)
+        client.login(self.credentials.login, self.credentials.password, self.shared_secret, self.steam_id, self.identity_secret)
         client._session.request('HEAD', 'http://steamcommunity.com')
         partner_steam_id = account_id_to_steam_id(partner_account_id)
         game = GameOptions.CS
@@ -157,15 +160,14 @@ class TestSteamClient(TestCase):
         # A sample trade URL with escrow time of 15 days cause mobile auth not added
         sample_trade_url = 'https://steamcommunity.com/tradeoffer/new/?partner=314218906&token=sgA4FdNm'
         client = SteamClient(self.credentials.api_key)
-        client.login(self.credentials.login, self.credentials.password, self.steam_guard_file)
+        client.login(self.credentials.login, self.credentials.password, self.shared_secret, self.steam_id, self.identity_secret)
         response = client.get_escrow_duration(sample_trade_url)
         self.assertEqual(response, 15)
 
     def test_get_wallet_balance(self):
-        with SteamClient(
-            self.credentials.api_key, self.credentials.login, self.credentials.password, self.steam_guard_file
-        ) as client:
+        with SteamClient(self.credentials.api_key, self.credentials.login, self.credentials.password, steam_id=self.steam_id, shared_secret=self.shared_secret, identity_secret=self.identity_secret) as client:
             wallet_balance = client.get_wallet_balance()
             self.assertIsInstance(wallet_balance, Decimal)
             wallet_balance = client.get_wallet_balance(convert_to_decimal=False)
             self.assertIsInstance(wallet_balance, str)
+
