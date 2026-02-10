@@ -106,6 +106,19 @@ class TestSteamClientUnit(TestCase):
         with self.assertRaises(ApiException):
             client._get_session_id()
 
+    def test_get_login_cookies_returns_expected_dict(self):
+        client = SteamClient('api-key')
+        jar = RequestsCookieJar()
+        jar.set('sessionid', 'sid-community', domain='steamcommunity.com', path='/')
+        jar.set('sessionid', 'sid-store', domain='store.steampowered.com', path='/')
+        jar.set('steamLoginSecure', 'login-secure-token', domain='store.steampowered.com', path='/')
+        client._session.cookies = jar
+
+        self.assertEqual(
+            client.get_login_cookies(),
+            {'sessionid': 'sid-community', 'steamLoginSecure': 'login-secure-token'},
+        )
+
     def test_get_session_id_falls_back_to_store_domain(self):
         client = SteamClient('api-key')
         jar = RequestsCookieJar()

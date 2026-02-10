@@ -4,7 +4,7 @@ import re
 import time
 import urllib.parse as urlparse
 from decimal import Decimal
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 import requests
 from requests import Response
@@ -297,6 +297,28 @@ class SteamClient:
     def get_refresh_token(self) -> Optional[str]:
         return self._refresh_token
 
+    def get_login_cookies(self) -> Dict[str, str]:
+        cookies: Dict[str, str] = {}
+        session_id = self._get_cookie_value('sessionid')
+        steam_login_secure = self._get_cookie_value('steamLoginSecure')
+        if session_id:
+            cookies['sessionid'] = session_id
+        if steam_login_secure:
+            cookies['steamLoginSecure'] = steam_login_secure
+        return cookies
+
+    def _get_cookie_value(
+        self, cookie_name: str, preferred_domains: Tuple[str, ...] = ('steamcommunity.com', 'store.steampowered.com')
+    ) -> Optional[str]:
+        for domain in preferred_domains:
+            cookie_value = self._session.cookies.get_dict(domain=domain, path='/').get(cookie_name)
+            if cookie_value:
+                return cookie_value
+        for cookie in self._session.cookies:
+            if cookie.name == cookie_name and cookie.value:
+                return cookie.value
+        return None
+
     def api_call(
         self, method: str, interface: str, api_method: str, version: str, params: dict = None
     ) -> requests.Response:
@@ -350,14 +372,7 @@ class SteamClient:
         return merge_items_with_descriptions_from_inventory(response_dict, game) if merge else response_dict
 
     def _get_session_id(self) -> str:
-        session_id = self._session.cookies.get_dict(domain='steamcommunity.com', path='/').get('sessionid')
-        if not session_id:
-            session_id = self._session.cookies.get_dict(domain='store.steampowered.com', path='/').get('sessionid')
-        if not session_id:
-            for cookie in self._session.cookies:
-                if cookie.name == 'sessionid' and cookie.value:
-                    session_id = cookie.value
-                    break
+        session_id = self._get_cookie_value('sessionid')
         if not session_id:
             raise ApiException('sessionid cookie is missing')
         return session_id
