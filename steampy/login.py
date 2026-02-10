@@ -1,6 +1,7 @@
 from base64 import b64encode
 from http import HTTPStatus
 import logging
+import re
 import time
 from typing import Dict, Optional
 
@@ -283,18 +284,40 @@ class LoginExecutor:
 
     def _check_steam_session(self) -> bool:
         try:
-            response = self._request('GET', f'{SteamUrl.STORE_URL}/account/')
+            store_response = self._request('GET', f'{SteamUrl.STORE_URL}/account/')
         except ApiException:
+            self._print_step('Session validation failed: store account request failed')
             return False
 
-        response_url = getattr(response, 'url', '') or ''
-        if '/login' in response_url.lower():
+        store_url = (getattr(store_response, 'url', '') or '').lower()
+        if '/login' in store_url:
+            self._print_step('Session validation failed: store account redirects to login')
             return False
 
-        if self.username:
-            return self.username.lower() in response.text.lower()
+        try:
+            community_response = self._request('GET', SteamUrl.COMMUNITY_URL)
+        except ApiException:
+            # Store account endpoint already confirmed authenticated context.
+            is_store_authenticated = store_response.status_code == HTTPStatus.OK
+            self._print_step(f'Session validation: community check failed, fallback to store status={is_store_authenticated}')
+            return is_store_authenticated
 
-        return response.status_code == HTTPStatus.OK
+        community_url = (getattr(community_response, 'url', '') or '').lower()
+        if '/login' in community_url:
+            self._print_step('Session validation failed: community redirects to login')
+            return False
+
+        if re.search(r'g_steamID = "(\d+)";', community_response.text):
+            self._print_step('Session validation succeeded: g_steamID marker found on community page')
+            return True
+
+        if self.username and self.username.lower() in community_response.text.lower():
+            self._print_step('Session validation succeeded: username found on community page')
+            return True
+
+        is_store_authenticated = store_response.status_code == HTTPStatus.OK
+        self._print_step(f'Session validation fallback to store account status={is_store_authenticated}')
+        return is_store_authenticated
 
     def _resolve_sessionid_cookie(self) -> str:
         # Prefer community cookie, then store cookie, then any available sessionid value.

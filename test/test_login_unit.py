@@ -1,3 +1,4 @@
+from http import HTTPStatus
 from unittest import TestCase
 from unittest.mock import MagicMock
 
@@ -88,3 +89,19 @@ class TestLoginExecutorUnit(TestCase):
         self.assertEqual(executor._finalize_login.call_count, 2)
         self.assertEqual(executor._finalize_login.call_args_list[0].kwargs, {'use_cookie_sessionid': True})
         self.assertEqual(executor._finalize_login.call_args_list[1].kwargs, {'use_cookie_sessionid': False})
+
+    def test_check_steam_session_uses_store_fallback_when_username_missing_in_html(self):
+        executor = LoginExecutor('user', 'pass', 'secret', MagicMock())
+        store_response = MagicMock(status_code=HTTPStatus.OK, url='https://store.steampowered.com/account/', text='account')
+        community_response = MagicMock(status_code=HTTPStatus.OK, url='https://steamcommunity.com/', text='public page')
+        executor._request = MagicMock(side_effect=[store_response, community_response])
+
+        self.assertTrue(executor._check_steam_session())
+
+    def test_check_steam_session_false_when_community_redirects_to_login(self):
+        executor = LoginExecutor('user', 'pass', 'secret', MagicMock())
+        store_response = MagicMock(status_code=HTTPStatus.OK, url='https://store.steampowered.com/account/', text='account')
+        community_response = MagicMock(status_code=HTTPStatus.OK, url='https://steamcommunity.com/login/home/', text='login')
+        executor._request = MagicMock(side_effect=[store_response, community_response])
+
+        self.assertFalse(executor._check_steam_session())
