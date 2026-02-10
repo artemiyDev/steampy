@@ -19,7 +19,7 @@ class TestSteamClient(TestCase):
     def test_get_steam_id(self):
         client = SteamClient(self.credentials.api_key)
         client.login(self.credentials.login, self.credentials.password, self.steam_guard_file)
-        self.assertEqual(client.get_steam_id(), int(self.steam_guard_file['Session']['SteamID']))
+        self.assertEqual(client.get_steam_id(), int(client.steam_guard['steamid']))
 
     def test_login(self):
         client = SteamClient(self.credentials.api_key)
@@ -143,10 +143,10 @@ class TestSteamClient(TestCase):
         client._session.request('HEAD', 'http://steamcommunity.com')
         partner_steam_id = account_id_to_steam_id(partner_account_id)
         game = GameOptions.CS
-        my_items = client.get_my_inventory(game, merge=False)['rgInventory']
-        partner_items = client.get_partner_inventory(partner_steam_id, game, merge=False)['rgInventory']
-        my_first_item = next(iter(my_items.values()))
-        partner_first_item = next(iter(partner_items.values()))
+        my_items = client.get_my_inventory(game, merge=False)['assets']
+        partner_items = client.get_partner_inventory(partner_steam_id, game, merge=False)['assets']
+        my_first_item = my_items[0]
+        partner_first_item = partner_items[0]
         my_asset = Asset(my_first_item['id'], game)
         partner_asset = Asset(partner_first_item['id'], game)
         response = client.make_offer_with_url([my_asset], [partner_asset], sample_trade_url, 'TESTOWA OFERTA')

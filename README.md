@@ -51,11 +51,11 @@ Usage
 [Obtaining SteamGuard using Android emulation]( https://github.com/codepath/android_guides/wiki/Genymotion-2.0-Emulators-with-Google-Play-support)
 
 ** __init__(self, api_key: str, username: str = None, password: str = None, steam_guard: str = None,
-                 login_cookies: dict = None, proxies: dict = None) -> None:**
+                 refresh_token: str = None, login_cookies: dict = None, proxies: dict = None) -> None:**
 
 
 SteamClient needs at least api_key to provide some functionalities. User can also provide username, password
-and SteamGuard file to be able to log in and use more methods. Proxies are also supported.
+and SteamGuard file to be able to log in and use more methods. Proxies and refresh-token session restore are also supported.
 
 ```python
 from steampy.client import SteamClient
@@ -72,6 +72,23 @@ from steampy.client import SteamClient
 login_cookies = {} # provide dict with cookies
 steam_client = SteamClient('MY_API_KEY',username='MY_USERNAME',login_cookies=login_cookies)
 assert steam_client.was_login_executed
+```
+
+You can persist and reuse `refresh_token` to restore session without full credentials flow (if token is still valid):
+
+```python
+from steampy.client import SteamClient
+
+saved_refresh_token = '...'
+steam_client = SteamClient(
+    'MY_API_KEY',
+    username='MY_USERNAME',
+    password='MY_PASSWORD',
+    steam_guard='PATH_TO_STEAMGUARD_FILE',
+    refresh_token=saved_refresh_token,
+)
+steam_client.login()
+new_refresh_token = steam_client.get_refresh_token()
 ```
 
 `proxies` dict can be provided for using proxy for internal SteamClient session.
@@ -197,6 +214,11 @@ with SteamClient('MY_API_KEY', 'MY_USERNAME', 'MY_PASSWORD', 'PATH_TO_STEAMGUARD
     client.some_method2(...)
     ...
 ```
+
+**get_refresh_token() -> Optional[str]**
+
+Returns current refresh token captured during successful login.  
+Store it securely if you want to restore session later using `SteamClient(..., refresh_token=...)`.
 
 **is_session_alive() -> None**
 

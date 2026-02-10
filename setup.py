@@ -1,14 +1,15 @@
-from setuptools import setup
 import sys
 
-if not sys.version_info[0] == 3 and sys.version_info[1] < 8:
+from setuptools import find_packages, setup
+
+if sys.version_info < (3, 8):
     sys.exit('Python < 3.8 is not supported')
 
 version = '1.1.2'
 
 setup(
     name='steampy',
-    packages=['steampy', 'test', 'examples', ],
+    packages=find_packages(include=['steampy', 'steampy.*']),
     version=version,
     description='A Steam lib for trade automation',
     author='Michał Bukowski',

@@ -3,12 +3,15 @@ import re
 import copy
 import math
 import struct
+import time
+from functools import wraps
 from typing import List
 from decimal import Decimal
 from urllib.parse import urlparse, parse_qs
 
 import requests
 from bs4 import BeautifulSoup, Tag
+from requests.exceptions import RequestException
 from requests.structures import CaseInsensitiveDict
 
 from steampy.models import GameOptions
@@ -16,6 +19,7 @@ from steampy.exceptions import ProxyConnectionError, LoginRequired
 
 
 def login_required(func):
+    @wraps(func)
     def func_wrapper(self, *args, **kwargs):
         if not self.was_login_executed:
             raise LoginRequired('Use login method first')
@@ -255,11 +259,20 @@ class Credentials:
 
 
 def ping_proxy(proxies: dict):
-    try:
-        requests.get('https://steamcommunity.com/', proxies=proxies)
-        return True
-    except Exception:
-        raise ProxyConnectionError('Proxy not working for steamcommunity.com')
+    attempts = 3
+    last_exc = None
+    for attempt in range(1, attempts + 1):
+        try:
+            requests.get('https://steamcommunity.com/', proxies=proxies, timeout=10)
+            return True
+        except RequestException as exc:
+            last_exc = exc
+            if attempt == attempts:
+                break
+            time.sleep(attempt)
+    raise ProxyConnectionError(
+        f'Proxy not working for steamcommunity.com after {attempts} attempts. proxies={proxies}. error={last_exc}'
+    ) from last_exc
 
 
 def create_cookie(name: str, cookie: str, domain: str) -> dict:

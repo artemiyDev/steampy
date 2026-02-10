@@ -1,27 +1,26 @@
+from dataclasses import dataclass
 from enum import IntEnum
-from collections import namedtuple
 
 
+@dataclass(frozen=True)
 class GameOptions:
-    PredefinedOptions = namedtuple('PredefinedOptions', ['app_id', 'context_id'])
-
-    STEAM = PredefinedOptions('753', '6')
-    DOTA2 = PredefinedOptions('570', '2')
-    CS = PredefinedOptions('730', '2')
-    TF2 = PredefinedOptions('440', '2')
-    PUBG = PredefinedOptions('578080', '2')
-    RUST = PredefinedOptions('252490', '2')
-
-    def __init__(self, app_id: str, context_id: str) -> None:
-        self.app_id = app_id
-        self.context_id = context_id
+    app_id: str
+    context_id: str
 
 
+GameOptions.STEAM = GameOptions('753', '6')
+GameOptions.DOTA2 = GameOptions('570', '2')
+GameOptions.CS = GameOptions('730', '2')
+GameOptions.TF2 = GameOptions('440', '2')
+GameOptions.PUBG = GameOptions('578080', '2')
+GameOptions.RUST = GameOptions('252490', '2')
+
+
+@dataclass(frozen=True)
 class Asset:
-    def __init__(self, asset_id: str, game: GameOptions, amount: int = 1) -> None:
-        self.asset_id = asset_id
-        self.game = game
-        self.amount = amount
+    asset_id: str
+    game: GameOptions
+    amount: int = 1
 
     def to_dict(self) -> dict:
         return {

@@ -1,7 +1,11 @@
 from decimal import Decimal
 from unittest import TestCase
+from unittest.mock import patch
+
+from requests.exceptions import RequestException
 
 from steampy import utils
+from steampy.exceptions import ProxyConnectionError
 
 
 class TestUtils(TestCase):
@@ -52,3 +56,14 @@ class TestUtils(TestCase):
         self.assertEqual(utils.calculate_net_price(Decimal('0.03'), publisher_fee, steam_fee), Decimal('0.01'))
         self.assertEqual(utils.calculate_net_price(Decimal('0.12'), publisher_fee, steam_fee), Decimal('0.10'))
         self.assertEqual(utils.calculate_net_price(Decimal('115'), publisher_fee, steam_fee), Decimal('100'))
+
+    @patch('steampy.utils.time.sleep')
+    @patch('steampy.utils.requests.get')
+    def test_ping_proxy_retries_and_raises(self, mocked_get, _):
+        mocked_get.side_effect = [
+            RequestException('p1'),
+            RequestException('p2'),
+            RequestException('p3'),
+        ]
+        with self.assertRaises(ProxyConnectionError):
+            utils.ping_proxy({'http': 'http://127.0.0.1:8080'})
