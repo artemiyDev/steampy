@@ -22,8 +22,7 @@ class TestLoginExecutorUnit(TestCase):
 
     def test_login_falls_back_to_full_login_when_refresh_invalid(self):
         executor = LoginExecutor('user', 'pass', 'secret', MagicMock(), refresh_token='rtok')
-        executor.refresh_session = MagicMock(return_value=True)
-        executor._check_steam_session = MagicMock(return_value=False)
+        executor.refresh_session = MagicMock(return_value=False)
         executor._send_login_request = MagicMock(return_value=MagicMock(json=lambda: {'response': {'ok': 1}}))
         executor._check_for_captcha = MagicMock()
         executor._update_steam_guard = MagicMock()
@@ -87,6 +86,27 @@ class TestLoginExecutorUnit(TestCase):
 
         self.assertTrue(result)
         self.assertEqual(executor._finalize_login.call_count, 2)
+        self.assertEqual(executor._finalize_login.call_args_list[0].kwargs, {'use_cookie_sessionid': True})
+        self.assertEqual(executor._finalize_login.call_args_list[1].kwargs, {'use_cookie_sessionid': False})
+
+    def test_refresh_session_retries_without_cookie_when_first_attempt_not_authenticated(self):
+        session = Session()
+        jar = RequestsCookieJar()
+        jar.set('sessionid', 'community-sid', domain='steamcommunity.com', path='/')
+        session.cookies = jar
+
+        executor = LoginExecutor('user', 'pass', 'secret', session, refresh_token='refresh-token')
+        executor._finalize_login = MagicMock(side_effect=[MagicMock(), MagicMock()])
+        executor._parse_json = MagicMock(return_value={'transfer_info': [{'url': 'u', 'params': {}}], 'steamID': '1'})
+        executor._perform_redirects = MagicMock()
+        executor.set_sessionid_cookies = MagicMock()
+        executor._request = MagicMock(return_value=MagicMock(status_code=200, url='https://steamcommunity.com', text='ok'))
+        executor._check_steam_session = MagicMock(side_effect=[False, True])
+
+        result = executor.refresh_session()
+
+        self.assertTrue(result)
+        self.assertEqual(executor._check_steam_session.call_count, 2)
         self.assertEqual(executor._finalize_login.call_args_list[0].kwargs, {'use_cookie_sessionid': True})
         self.assertEqual(executor._finalize_login.call_args_list[1].kwargs, {'use_cookie_sessionid': False})
 

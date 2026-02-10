@@ -43,6 +43,73 @@ class TestSteamClientUnit(TestCase):
             )
         self.assertEqual(client.steam_guard['steamid'], '76561198012345678')
 
+    def test_set_login_cookies_sets_auth_cookies_for_both_domains(self):
+        with patch.object(SteamClient, 'get_steam_id', side_effect=AssertionError('should not be called')):
+            client = SteamClient(
+                'api-key',
+                login_cookies={'sessionid': 'sid', 'steamLoginSecure': '76561198012345678%7C%7Cjwt-token'},
+            )
+
+        community_cookies = client._session.cookies.get_dict(domain='steamcommunity.com', path='/')
+        store_cookies = client._session.cookies.get_dict(domain='store.steampowered.com', path='/')
+
+        self.assertEqual(community_cookies.get('sessionid'), 'sid')
+        self.assertEqual(store_cookies.get('sessionid'), 'sid')
+        self.assertEqual(community_cookies.get('steamLoginSecure'), '76561198012345678%7C%7Cjwt-token')
+        self.assertEqual(store_cookies.get('steamLoginSecure'), '76561198012345678%7C%7Cjwt-token')
+
+    def test_set_login_cookies_accepts_jsonable_cookie_list(self):
+        jsonable_cookies = [
+            {
+                'name': 'sessionid',
+                'value': 'sid-community',
+                'domain': 'steamcommunity.com',
+                'path': '/',
+                'expires': None,
+                'secure': True,
+                'discard': False,
+                'rest': {},
+            },
+            {
+                'name': 'sessionid',
+                'value': 'sid-store',
+                'domain': 'store.steampowered.com',
+                'path': '/',
+                'expires': None,
+                'secure': True,
+                'discard': False,
+                'rest': {},
+            },
+            {
+                'name': 'steamLoginSecure',
+                'value': '76561198012345678%7C%7Cjwt-token',
+                'domain': 'steamcommunity.com',
+                'path': '/',
+                'expires': None,
+                'secure': True,
+                'discard': False,
+                'rest': {'HttpOnly': None},
+            },
+            {
+                'name': 'steamLoginSecure',
+                'value': '76561198012345678%7C%7Cjwt-token',
+                'domain': 'store.steampowered.com',
+                'path': '/',
+                'expires': None,
+                'secure': True,
+                'discard': False,
+                'rest': {'HttpOnly': None},
+            },
+        ]
+
+        with patch.object(SteamClient, 'get_steam_id', side_effect=AssertionError('should not be called')):
+            client = SteamClient('api-key', login_cookies=jsonable_cookies)
+
+        self.assertTrue(client.was_login_executed)
+        self.assertEqual(client.steam_guard['steamid'], '76561198012345678')
+        self.assertEqual(client._session.cookies.get_dict(domain='steamcommunity.com', path='/').get('sessionid'), 'sid-community')
+        self.assertEqual(client._session.cookies.get_dict(domain='store.steampowered.com', path='/').get('sessionid'), 'sid-store')
+
     def test_login_requires_shared_secret_for_credentials_login(self):
         client = SteamClient('api-key', username='user', password='pass')
         with self.assertRaises(InvalidCredentials):
@@ -64,6 +131,57 @@ class TestSteamClientUnit(TestCase):
         self.assertTrue(client.was_login_executed)
         self.assertEqual(client.get_refresh_token(), 'refresh-token-2')
         self.assertEqual(client.steam_guard['steamid'], '76561198012345678')
+        mocked_executor.login.assert_called_once()
+
+    @patch('steampy.client.LoginExecutor')
+    def test_login_checks_cookies_before_refresh_executor(self, mocked_login_executor_cls):
+        client = SteamClient(
+            'api-key',
+            refresh_token='refresh-token',
+            login_cookies={'sessionid': 'sid', 'steamLoginSecure': '76561198012345678%7C%7Cjwt-token'},
+        )
+        events = []
+
+        mocked_executor = mocked_login_executor_cls.return_value
+        mocked_executor.refresh_token = 'refresh-token-2'
+        mocked_executor.login = MagicMock(side_effect=lambda: events.append('executor_login'))
+        client.is_session_alive = MagicMock(side_effect=lambda: events.append('cookies_check') or False)
+
+        client.login()
+
+        self.assertEqual(events, ['cookies_check', 'executor_login'])
+        mocked_executor.login.assert_called_once()
+
+    @patch('steampy.client.LoginExecutor')
+    def test_login_skips_refresh_and_credentials_when_cookies_alive(self, mocked_login_executor_cls):
+        client = SteamClient(
+            'api-key',
+            refresh_token='refresh-token',
+            login_cookies={'sessionid': 'sid', 'steamLoginSecure': '76561198012345678%7C%7Cjwt-token'},
+        )
+        client.is_session_alive = MagicMock(return_value=True)
+
+        client.login()
+
+        mocked_login_executor_cls.assert_not_called()
+
+    @patch('steampy.client.LoginExecutor')
+    def test_login_continues_to_refresh_when_cookie_check_raises(self, mocked_login_executor_cls):
+        client = SteamClient(
+            'api-key',
+            username='user',
+            password='pass',
+            shared_secret='secret',
+            login_cookies={'sessionid': 'sid', 'steamLoginSecure': '76561198012345678%7C%7Cjwt-token'},
+        )
+
+        mocked_executor = mocked_login_executor_cls.return_value
+        mocked_executor.refresh_token = None
+        mocked_executor.login = MagicMock()
+        client.is_session_alive = MagicMock(side_effect=ApiException('cookie check failed'))
+
+        client.login()
+
         mocked_executor.login.assert_called_once()
 
     def test_filter_non_active_offers_keeps_only_active(self):
@@ -118,6 +236,54 @@ class TestSteamClientUnit(TestCase):
             client.get_login_cookies(),
             {'sessionid': 'sid-community', 'steamLoginSecure': 'login-secure-token'},
         )
+
+    def test_get_login_cookies_prefers_store_for_steam_login_secure(self):
+        client = SteamClient('api-key')
+        jar = RequestsCookieJar()
+        jar.set('sessionid', 'sid-community', domain='steamcommunity.com', path='/')
+        jar.set('steamLoginSecure', 'community-token', domain='steamcommunity.com', path='/')
+        jar.set('steamLoginSecure', 'store-token', domain='store.steampowered.com', path='/')
+        client._session.cookies = jar
+
+        self.assertEqual(
+            client.get_login_cookies(),
+            {'sessionid': 'sid-community', 'steamLoginSecure': 'store-token'},
+        )
+
+    def test_get_and_set_jsonable_cookies_round_trip(self):
+        with patch.object(SteamClient, 'get_steam_id', side_effect=AssertionError('should not be called')):
+            source_client = SteamClient(
+                'api-key',
+                login_cookies={'sessionid': 'sid', 'steamLoginSecure': '76561198012345678%7C%7Cjwt-token'},
+            )
+        source_client._session.cookies.set('timezoneOffset', '10800,0', domain='steamcommunity.com', path='/')
+
+        dumped_cookies = source_client.get_jsonable_cookies()
+        self.assertTrue(any(cookie['name'] == 'sessionid' and cookie['domain'] == 'steamcommunity.com' for cookie in dumped_cookies))
+        self.assertTrue(any(cookie['name'] == 'timezoneOffset' for cookie in dumped_cookies))
+
+        with patch.object(SteamClient, 'get_steam_id', side_effect=AssertionError('should not be called')):
+            restored_client = SteamClient('api-key')
+            restored_client.set_jsonable_cookies(dumped_cookies)
+
+        self.assertEqual(
+            restored_client._session.cookies.get_dict(domain='steamcommunity.com', path='/').get('sessionid'),
+            'sid',
+        )
+        self.assertEqual(
+            restored_client._session.cookies.get_dict(domain='steamcommunity.com', path='/').get('timezoneOffset'),
+            '10800,0',
+        )
+        self.assertEqual(
+            restored_client.get_login_cookies(),
+            {'sessionid': 'sid', 'steamLoginSecure': '76561198012345678%7C%7Cjwt-token'},
+        )
+
+    def test_set_jsonable_cookies_raises_for_non_list(self):
+        client = SteamClient('api-key')
+
+        with self.assertRaises(TypeError):
+            client.set_jsonable_cookies({'sessionid': 'sid'})
 
     def test_get_session_id_falls_back_to_store_domain(self):
         client = SteamClient('api-key')

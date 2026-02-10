@@ -107,19 +107,17 @@ class LoginExecutor:
 
     def login(self) -> Session:
         self._print_step('Starting login flow')
-        if self.refresh_token and self.refresh_session():
-            self._print_step('Refresh flow finished, validating authenticated session')
-            if self._check_steam_session():
+        if self.refresh_token:
+            if self.refresh_session():
                 self._print_step('Session restored via refresh token')
                 logger.info('%s | Session restored via refresh token', self.username)
                 return self.session
-            self._print_step('Refresh completed, but session is not authenticated. Falling back to credentials login')
-            logger.info('%s | Refresh session check failed, using full login flow', self.username)
-        elif self.refresh_token and not self._has_credentials_login_data():
-            self._print_step('Refresh login failed and credentials are missing')
-            raise InvalidCredentials(
-                'Refresh token login failed and no username/password/shared_secret were provided for fallback login'
-            )
+            if not self._has_credentials_login_data():
+                self._print_step('Refresh login failed and credentials are missing')
+                raise InvalidCredentials(
+                    'Refresh token login failed and no username/password/shared_secret were provided for fallback login'
+                )
+            self._print_step('Refresh flow failed, continuing with credentials login')
 
         if not self._has_credentials_login_data():
             self._print_step('Credentials are missing for full login flow')
@@ -163,8 +161,12 @@ class LoginExecutor:
                 self.set_sessionid_cookies()
                 self._request('GET', SteamUrl.COMMUNITY_URL)
                 self._request('GET', SteamUrl.STORE_URL)
-                self._print_step(f'Refresh succeeded via {attempt_label}')
-                return True
+                if self._check_steam_session():
+                    self._print_step(f'Refresh succeeded via {attempt_label}')
+                    return True
+                self._print_step(
+                    f'Refresh transport succeeded via {attempt_label}, but session is not authenticated'
+                )
             except ApiException as exc:
                 logger.warning('%s | Session refresh failed via %s: %s', self.username, attempt_label, exc)
                 self._print_step(f'Refresh failed via {attempt_label}: {exc}')

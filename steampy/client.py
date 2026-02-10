@@ -8,6 +8,7 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 
 import requests
 from requests import Response
+from requests.cookies import create_cookie
 from requests.exceptions import RequestException
 
 from steampy.confirmation import ConfirmationExecutor
@@ -37,6 +38,8 @@ class SteamClient:
     MAX_JSON_RETRIES = 3
     NETWORK_RETRIES = 3
     RETRY_BACKOFF_SECONDS = 1
+    STEAM_COOKIE_DOMAINS: Tuple[str, ...] = ('steamcommunity.com', 'store.steampowered.com')
+    AUTH_COOKIE_NAMES: Tuple[str, ...] = ('sessionid', 'steamLoginSecure', 'steamRefresh_steam', 'steamCountry')
 
     def __init__(
         self,
@@ -47,7 +50,7 @@ class SteamClient:
         shared_secret: str = None,
         identity_secret: str = None,
         refresh_token: str = None,
-        login_cookies: dict = None,
+        login_cookies: Union[dict, List[dict]] = None,
         proxies: dict = None,
     ) -> None:
         self._api_key = api_key
@@ -172,19 +175,24 @@ class SteamClient:
 
         return proxies
 
-    def set_login_cookies(self, cookies: dict) -> None:
-        self._session.cookies.update(cookies)
-        self.was_login_executed = True
+    def set_login_cookies(self, cookies: Union[dict, List[dict]]) -> None:
+        if isinstance(cookies, list):
+            self.set_jsonable_cookies(cookies)
+            return
+        if not isinstance(cookies, dict):
+            raise TypeError('login_cookies must be either a dict or a list of cookie dicts')
 
-        if not self._steam_id:
-            steam_login_secure = cookies.get('steamLoginSecure')
-            if steam_login_secure:
-                self._steam_id = self._extract_steam_id_from_steam_login_secure(steam_login_secure)
-            if not self._steam_id:
-                self._steam_id = str(self.get_steam_id())
-        self._sync_steam_guard()
-
-        self.market._set_login_executed(self.steam_guard, self._get_session_id())
+        # Avoid cross-domain/global cookies and apply auth cookies explicitly to Steam domains.
+        self._clear_auth_cookies()
+        for cookie_name, cookie_value in cookies.items():
+            if cookie_value is None:
+                continue
+            if cookie_name in self.AUTH_COOKIE_NAMES:
+                self._set_cookie_for_steam_domains(cookie_name, str(cookie_value))
+                continue
+            self._session.cookies.set(cookie_name, str(cookie_value))
+        self._set_cookie_for_steam_domains('steamRememberLogin', 'true')
+        self._initialize_login_state_from_cookies(cookies.get('steamLoginSecure'))
 
     @login_required
     def get_steam_id(self) -> int:
@@ -225,9 +233,15 @@ class SteamClient:
                 'You must provide either username/password/shared_secret or a valid refresh_token'
             )
 
-        if self.was_login_executed and self.is_session_alive():
-            self._print_login_step('Existing session is already alive, skipping login')
-            return
+        if self.was_login_executed:
+            self._print_login_step('Checking existing cookies session')
+            try:
+                if self.is_session_alive():
+                    self._print_login_step('Existing session is already alive, skipping login')
+                    return
+                self._print_login_step('Cookies session is not valid, trying refresh token flow')
+            except ApiException as exc:
+                self._print_login_step(f'Cookies session check failed: {exc}. Trying refresh token flow')
 
         self._session.cookies.set('steamRememberLogin', 'true')
         self._print_login_step('Created login executor, attempting refresh/cookies flow first when possible')
@@ -310,15 +324,87 @@ class SteamClient:
     def get_refresh_token(self) -> Optional[str]:
         return self._refresh_token
 
+    def get_jsonable_cookies(self) -> List[Dict[str, Any]]:
+        cookies: List[Dict[str, Any]] = []
+        for cookie in self._session.cookies:
+            cookies.append(
+                {
+                    'name': cookie.name,
+                    'value': cookie.value,
+                    'domain': cookie.domain,
+                    'path': cookie.path,
+                    'expires': cookie.expires,
+                    'secure': cookie.secure,
+                    'discard': cookie.discard,
+                    'rest': dict(getattr(cookie, '_rest', {}) or {}),
+                }
+            )
+        return cookies
+
+    def set_jsonable_cookies(self, cookies: List[dict]) -> None:
+        if not isinstance(cookies, list):
+            raise TypeError('jsonable cookies must be a list of cookie dicts')
+
+        self._clear_auth_cookies()
+        for cookie_data in cookies:
+            if not isinstance(cookie_data, dict):
+                raise TypeError('Each cookie entry must be a dict')
+
+            cookie_name = cookie_data.get('name')
+            cookie_value = cookie_data.get('value')
+            if not cookie_name or cookie_value is None:
+                continue
+
+            cookie_kwargs: Dict[str, Any] = {
+                'name': str(cookie_name),
+                'value': str(cookie_value),
+                'domain': str(cookie_data.get('domain') or ''),
+                'path': str(cookie_data.get('path') or '/'),
+                'secure': bool(cookie_data.get('secure', False)),
+                'expires': cookie_data.get('expires'),
+                'discard': bool(cookie_data.get('discard', False)),
+                'rest': cookie_data.get('rest') if isinstance(cookie_data.get('rest'), dict) else {},
+            }
+            for optional_key in ('version', 'comment', 'comment_url', 'rfc2109'):
+                if optional_key in cookie_data and cookie_data[optional_key] is not None:
+                    cookie_kwargs[optional_key] = cookie_data[optional_key]
+
+            self._session.cookies.set_cookie(create_cookie(**cookie_kwargs))
+
+        self._set_cookie_for_steam_domains('steamRememberLogin', 'true')
+        self._initialize_login_state_from_cookies()
+
     def get_login_cookies(self) -> Dict[str, str]:
         cookies: Dict[str, str] = {}
         session_id = self._get_cookie_value('sessionid')
-        steam_login_secure = self._get_cookie_value('steamLoginSecure')
+        steam_login_secure = self._get_cookie_value(
+            'steamLoginSecure',
+            preferred_domains=('store.steampowered.com', 'steamcommunity.com'),
+        )
         if session_id:
             cookies['sessionid'] = session_id
         if steam_login_secure:
             cookies['steamLoginSecure'] = steam_login_secure
         return cookies
+
+    def _set_cookie_for_steam_domains(self, cookie_name: str, cookie_value: str) -> None:
+        for domain in self.STEAM_COOKIE_DOMAINS:
+            self._session.cookies.set(cookie_name, cookie_value, domain=domain, path='/')
+
+    def _initialize_login_state_from_cookies(self, steam_login_secure: str = None) -> None:
+        self.was_login_executed = True
+
+        if not self._steam_id:
+            steam_login_secure = steam_login_secure or self._get_cookie_value(
+                'steamLoginSecure',
+                preferred_domains=('store.steampowered.com', 'steamcommunity.com'),
+            )
+            if steam_login_secure:
+                self._steam_id = self._extract_steam_id_from_steam_login_secure(steam_login_secure)
+            if not self._steam_id:
+                self._steam_id = str(self.get_steam_id())
+        self._sync_steam_guard()
+        self.market._set_login_executed(self.steam_guard, self._get_session_id())
 
     def _get_cookie_value(
         self, cookie_name: str, preferred_domains: Tuple[str, ...] = ('steamcommunity.com', 'store.steampowered.com')
