@@ -34,6 +34,16 @@ class TestLoginExecutorUnit(TestCase):
 
         executor._send_login_request.assert_called_once()
 
+    def test_login_raises_when_refresh_fails_and_no_credentials(self):
+        executor = LoginExecutor('', '', '', MagicMock(), refresh_token='rtok')
+        executor.refresh_session = MagicMock(return_value=False)
+        executor._send_login_request = MagicMock()
+
+        with self.assertRaises(InvalidCredentials):
+            executor.login()
+
+        executor._send_login_request.assert_not_called()
+
     def test_poll_session_status_raises_when_refresh_token_missing(self):
         session = MagicMock()
         executor = LoginExecutor('user', 'pass', 'secret', session)

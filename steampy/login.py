@@ -23,11 +23,16 @@ class LoginExecutor:
     RETRY_BACKOFF_SECONDS = 1
 
     def __init__(
-        self, username: str, password: str, shared_secret: str, session: Session, refresh_token: Optional[str] = None
+        self,
+        username: Optional[str],
+        password: Optional[str],
+        shared_secret: Optional[str],
+        session: Session,
+        refresh_token: Optional[str] = None,
     ) -> None:
-        self.username = username
-        self.password = password
-        self.shared_secret = shared_secret
+        self.username = username or ''
+        self.password = password or ''
+        self.shared_secret = shared_secret or ''
         self.session = session
         self.session.headers.setdefault('User-Agent', DEFAULT_USER_AGENT)
         self.refresh_token = refresh_token or ''
@@ -75,12 +80,22 @@ class LoginExecutor:
             preview = response.text[:300].replace('\n', ' ')
             raise ApiException(f'Invalid JSON during {context}. Status: {response.status_code}. Body: {preview}') from exc
 
+    def _has_credentials_login_data(self) -> bool:
+        return all((self.username, self.password, self.shared_secret))
+
     def login(self) -> Session:
         if self.refresh_token and self.refresh_session():
             if self._check_steam_session():
                 logger.info('%s | Session restored via refresh token', self.username)
                 return self.session
             logger.info('%s | Refresh session check failed, using full login flow', self.username)
+        elif self.refresh_token and not self._has_credentials_login_data():
+            raise InvalidCredentials(
+                'Refresh token login failed and no username/password/shared_secret were provided for fallback login'
+            )
+
+        if not self._has_credentials_login_data():
+            raise InvalidCredentials('Username, password and shared_secret are required for credentials login flow')
 
         login_response = self._send_login_request()
         login_payload = self._parse_json(login_response, 'BeginAuthSessionViaCredentials')
@@ -221,7 +236,15 @@ class LoginExecutor:
             response = self._request('GET', f'{SteamUrl.STORE_URL}/account/')
         except ApiException:
             return False
-        return self.username.lower() in response.text.lower()
+
+        response_url = getattr(response, 'url', '') or ''
+        if '/login' in response_url.lower():
+            return False
+
+        if self.username:
+            return self.username.lower() in response.text.lower()
+
+        return response.status_code == HTTPStatus.OK
 
     def _resolve_sessionid_cookie(self) -> str:
         # Prefer community cookie, then store cookie, then any available sessionid value.

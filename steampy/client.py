@@ -129,6 +129,13 @@ class SteamClient:
         candidate = parts[0].strip()
         return candidate if candidate.isdigit() else None
 
+    def _fetch_steam_id_from_community_page(self) -> str:
+        response = self._request('GET', SteamUrl.COMMUNITY_URL)
+        steam_id_match = re.search(r'g_steamID = "(\d+)";', response.text)
+        if not steam_id_match:
+            raise ValueError('Unable to parse steam id from community page')
+        return steam_id_match.group(1)
+
     def _sync_steam_guard(self) -> None:
         updated_guard: Dict[str, str] = {}
         if self._steam_id:
@@ -167,11 +174,7 @@ class SteamClient:
 
     @login_required
     def get_steam_id(self) -> int:
-        response = self._request('GET', SteamUrl.COMMUNITY_URL)
-        steam_id_match = re.search(r'g_steamID = "(\d+)";', response.text)
-        if not steam_id_match:
-            raise ValueError('Unable to parse steam id from community page')
-        return int(steam_id_match.group(1))
+        return int(self._fetch_steam_id_from_community_page())
 
     def login(
         self,
@@ -189,19 +192,21 @@ class SteamClient:
             self._shared_secret = shared_secret
         self._sync_steam_guard()
 
-        invalid_client_credentials_is_present = None in (self.username, self._password, self._shared_secret)
-        invalid_login_credentials_is_present = None in (username, password, shared_secret)
+        has_client_credentials = all((self.username, self._password, self._shared_secret))
+        has_call_credentials = all((username, password, shared_secret))
+        has_refresh_token = bool(self._refresh_token)
 
-        if invalid_client_credentials_is_present and invalid_login_credentials_is_present:
-            raise InvalidCredentials(
-                'You have to pass username, password and shared_secret parameters when using "login" method'
-            )
-
-        if invalid_client_credentials_is_present:
+        if not has_client_credentials and has_call_credentials:
             self.username = username
             self._password = password
             self._shared_secret = shared_secret
             self._sync_steam_guard()
+            has_client_credentials = True
+
+        if not has_client_credentials and not has_refresh_token:
+            raise InvalidCredentials(
+                'You must provide either username/password/shared_secret or a valid refresh_token'
+            )
 
         if self.was_login_executed and self.is_session_alive():
             return
@@ -221,7 +226,7 @@ class SteamClient:
             if steam_login_secure_cookie and steam_login_secure_cookie.value:
                 self._steam_id = self._extract_steam_id_from_steam_login_secure(steam_login_secure_cookie.value)
             if not self._steam_id:
-                self._steam_id = str(self.get_steam_id())
+                self._steam_id = self._fetch_steam_id_from_community_page()
         self._sync_steam_guard()
         self.was_login_executed = True
         self.market._set_login_executed(self.steam_guard, self._get_session_id())

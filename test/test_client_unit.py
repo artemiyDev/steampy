@@ -47,6 +47,25 @@ class TestSteamClientUnit(TestCase):
         with self.assertRaises(InvalidCredentials):
             client.login()
 
+    @patch('steampy.client.LoginExecutor')
+    def test_login_allows_refresh_token_only_mode(self, mocked_login_executor_cls):
+        client = SteamClient('api-key', refresh_token='refresh-token')
+        client._session.cookies.set('sessionid', 'sid', domain='steamcommunity.com', path='/')
+        client._session.cookies.set(
+            'steamLoginSecure', '76561198012345678%7C%7Cjwt-token', domain='steamcommunity.com', path='/'
+        )
+
+        mocked_executor = mocked_login_executor_cls.return_value
+        mocked_executor.refresh_token = 'refresh-token-2'
+        mocked_executor.login = MagicMock()
+
+        client.login()
+
+        self.assertTrue(client.was_login_executed)
+        self.assertEqual(client.get_refresh_token(), 'refresh-token-2')
+        self.assertEqual(client.steam_guard['steamid'], '76561198012345678')
+        mocked_executor.login.assert_called_once()
+
     def test_filter_non_active_offers_keeps_only_active(self):
         payload = {
             'response': {

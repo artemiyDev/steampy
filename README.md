@@ -95,6 +95,20 @@ steam_client.login()
 new_refresh_token = steam_client.get_refresh_token()
 ```
 
+`refresh_token`-only login is also supported:
+
+```python
+from steampy.client import SteamClient
+
+steam_client = SteamClient(
+    'MY_API_KEY',
+    steam_id='MY_STEAM_ID_64',
+    identity_secret='MY_IDENTITY_SECRET',  # required only for mobile confirmations
+    refresh_token='SAVED_REFRESH_TOKEN',
+)
+steam_client.login()
+```
+
 `proxies` dict can be provided for using proxy for internal SteamClient session.
 
 ```python

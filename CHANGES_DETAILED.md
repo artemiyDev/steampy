@@ -117,7 +117,7 @@
 - Executed:
   - `python -m unittest discover -s test -p "test_*.py"`
 - Result:
-  - `Ran 57 tests`
+  - `Ran 61 tests`
   - `OK (skipped=26)`
 
 Skipped tests are existing integration tests that require real Steam secrets/environment.
@@ -210,3 +210,23 @@ Skipped tests are existing integration tests that require real Steam secrets/env
 - Added unit coverage for new constructor/login contract:
   - steam id extraction from `steamLoginSecure`,
   - enforcement that credentials login requires `shared_secret`.
+
+## 11) Refresh-Only Login Mode
+
+### `steampy/client.py`
+- `SteamClient.login()` now accepts refresh-token-only flow:
+  - if `refresh_token` exists, client may login without username/password/shared_secret,
+  - credentials are required only when refresh fails and fallback credentials login is needed.
+- Improved internal steam-id retrieval during login by using a non-decorated parser helper, avoiding login-state dependency.
+
+### `steampy/login.py`
+- `LoginExecutor.login()` now clearly separates flows:
+  - tries refresh first when token exists,
+  - if refresh fails and credentials are missing, raises explicit `InvalidCredentials`,
+  - proceeds with credentials flow only when required fields are present.
+- `_check_steam_session()` now works when username is absent by checking account page URL/status instead of username text only.
+
+### Tests
+- Added coverage for refresh-only mode:
+  - `test/test_client_unit.py`: login without credentials using refresh token.
+  - `test/test_login_unit.py`: explicit failure when refresh fails and no credentials exist.
