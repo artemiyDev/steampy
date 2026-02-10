@@ -321,7 +321,10 @@ class SteamClient:
         if not session_id:
             session_id = self._session.cookies.get_dict(domain='store.steampowered.com', path='/').get('sessionid')
         if not session_id:
-            session_id = self._session.cookies.get('sessionid')
+            for cookie in self._session.cookies:
+                if cookie.name == 'sessionid' and cookie.value:
+                    session_id = cookie.value
+                    break
         if not session_id:
             raise ApiException('sessionid cookie is missing')
         return session_id

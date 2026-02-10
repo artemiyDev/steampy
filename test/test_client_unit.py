@@ -95,6 +95,15 @@ class TestSteamClientUnit(TestCase):
 
         self.assertEqual(client._get_session_id(), 'sid-store')
 
+    def test_get_session_id_with_duplicate_name_uses_community_cookie(self):
+        client = SteamClient('api-key')
+        jar = RequestsCookieJar()
+        jar.set('sessionid', 'sid-community', domain='steamcommunity.com', path='/')
+        jar.set('sessionid', 'sid-store', domain='store.steampowered.com', path='/')
+        client._session.cookies = jar
+
+        self.assertEqual(client._get_session_id(), 'sid-community')
+
     def test_extract_access_token_returns_none_for_invalid_cookie(self):
         self.assertIsNone(SteamClient._extract_access_token('invalid-cookie'))
 

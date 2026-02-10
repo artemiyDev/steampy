@@ -1,6 +1,9 @@
 from unittest import TestCase
 from unittest.mock import MagicMock
 
+from requests import Session
+from requests.cookies import RequestsCookieJar
+
 from steampy.login import LoginExecutor, InvalidCredentials
 
 
@@ -39,3 +42,18 @@ class TestLoginExecutorUnit(TestCase):
 
         with self.assertRaises(InvalidCredentials):
             executor._poll_session_status('client', 'request')
+
+    def test_finalize_login_uses_domain_specific_sessionid_without_cookie_conflict(self):
+        session = Session()
+        jar = RequestsCookieJar()
+        jar.set('sessionid', 'community-sid', domain='steamcommunity.com', path='/')
+        jar.set('sessionid', 'store-sid', domain='store.steampowered.com', path='/')
+        session.cookies = jar
+
+        executor = LoginExecutor('user', 'pass', 'secret', session, refresh_token='refresh-token')
+        executor._request = MagicMock(return_value=MagicMock())
+
+        executor._finalize_login(use_cookie_sessionid=True)
+
+        _, kwargs = executor._request.call_args
+        self.assertEqual(kwargs['files']['sessionid'][1], 'community-sid')

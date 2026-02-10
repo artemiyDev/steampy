@@ -223,10 +223,26 @@ class LoginExecutor:
             return False
         return self.username.lower() in response.text.lower()
 
+    def _resolve_sessionid_cookie(self) -> str:
+        # Prefer community cookie, then store cookie, then any available sessionid value.
+        community_sessionid = self.session.cookies.get_dict(domain='steamcommunity.com', path='/').get('sessionid')
+        if community_sessionid:
+            return community_sessionid
+
+        store_sessionid = self.session.cookies.get_dict(domain='store.steampowered.com', path='/').get('sessionid')
+        if store_sessionid:
+            return store_sessionid
+
+        for cookie in self.session.cookies:
+            if cookie.name == 'sessionid' and cookie.value:
+                return cookie.value
+
+        return ''
+
     def _finalize_login(self, use_cookie_sessionid: bool = True) -> Response:
         sessionid = ''
         if use_cookie_sessionid:
-            sessionid = self.session.cookies.get('sessionid')
+            sessionid = self._resolve_sessionid_cookie()
             if not sessionid:
                 raise ApiException('sessionid cookie is missing before finalizing login')
 
