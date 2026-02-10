@@ -15,6 +15,7 @@ from requests.exceptions import RequestException
 from requests.structures import CaseInsensitiveDict
 
 from steampy.models import GameOptions
+from steampy.models import DEFAULT_USER_AGENT
 from steampy.exceptions import ProxyConnectionError, LoginRequired
 
 
@@ -263,7 +264,12 @@ def ping_proxy(proxies: dict):
     last_exc = None
     for attempt in range(1, attempts + 1):
         try:
-            requests.get('https://steamcommunity.com/', proxies=proxies, timeout=10)
+            requests.get(
+                'https://steamcommunity.com/',
+                proxies=proxies,
+                timeout=10,
+                headers={'User-Agent': DEFAULT_USER_AGENT},
+            )
             return True
         except RequestException as exc:
             last_exc = exc

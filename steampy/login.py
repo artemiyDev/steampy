@@ -10,7 +10,7 @@ from rsa import PublicKey, encrypt
 
 from steampy import guard
 from steampy.exceptions import ApiException, CaptchaRequired, InvalidCredentials
-from steampy.models import SteamUrl
+from steampy.models import DEFAULT_USER_AGENT, SteamUrl
 from steampy.utils import create_cookie
 
 logger = logging.getLogger(__name__)
@@ -29,6 +29,7 @@ class LoginExecutor:
         self.password = password
         self.shared_secret = shared_secret
         self.session = session
+        self.session.headers.setdefault('User-Agent', DEFAULT_USER_AGENT)
         self.refresh_token = refresh_token or ''
 
     def _request(self, method: str, url: str, **kwargs) -> Response:

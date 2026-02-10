@@ -11,7 +11,7 @@ from requests.exceptions import RequestException
 
 from steampy.confirmation import ConfirmationExecutor
 from steampy.exceptions import ApiException, TooManyRequests
-from steampy.models import Currency, GameOptions, SteamUrl
+from steampy.models import DEFAULT_USER_AGENT, Currency, GameOptions, SteamUrl
 from steampy.utils import (
     get_listing_id_to_assets_address_from_html,
     get_market_listings_from_html,
@@ -31,6 +31,7 @@ class SteamMarket:
 
     def __init__(self, session: Session) -> None:
         self._session = session
+        self._session.headers.setdefault('User-Agent', DEFAULT_USER_AGENT)
         self._steam_guard = None
         self._session_id = None
         self.was_login_executed = False

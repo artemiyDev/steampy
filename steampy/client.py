@@ -15,7 +15,7 @@ from steampy.confirmation import ConfirmationExecutor
 from steampy.exceptions import ApiException, SevenDaysHoldException, TooManyRequests
 from steampy.login import InvalidCredentials, LoginExecutor
 from steampy.market import SteamMarket
-from steampy.models import Asset, GameOptions, SteamUrl, TradeOfferState
+from steampy.models import DEFAULT_USER_AGENT, Asset, GameOptions, SteamUrl, TradeOfferState
 from steampy.utils import (
     account_id_to_steam_id,
     get_description_key,
@@ -51,6 +51,7 @@ class SteamClient:
     ) -> None:
         self._api_key = api_key
         self._session = requests.Session()
+        self._session.headers.setdefault('User-Agent', DEFAULT_USER_AGENT)
         self._access_token: Optional[str] = None
 
         if proxies:

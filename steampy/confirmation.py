@@ -11,6 +11,7 @@ from bs4 import BeautifulSoup
 from steampy import guard
 from steampy.exceptions import ConfirmationExpected
 from steampy.login import InvalidCredentials
+from steampy.models import DEFAULT_USER_AGENT
 
 logger = logging.getLogger(__name__)
 
@@ -39,6 +40,7 @@ class ConfirmationExecutor:
         self._my_steam_id = my_steam_id
         self._identity_secret = identity_secret
         self._session = session
+        self._session.headers.setdefault('User-Agent', DEFAULT_USER_AGENT)
 
     def _request(self, method: str, url: str, **kwargs) -> requests.Response:
         kwargs.setdefault('timeout', self.REQUEST_TIMEOUT_SECONDS)

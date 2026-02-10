@@ -107,3 +107,9 @@ class Endpoints:
     SEND_MESSAGE = f'{SteamUrl.API_URL}/ISteamWebUserPresenceOAuth/Message/v1'
     CHAT_LOGOUT = f'{SteamUrl.API_URL}/ISteamWebUserPresenceOAuth/Logoff/v1'
     CHAT_POLL = f'{SteamUrl.API_URL}/ISteamWebUserPresenceOAuth/Poll/v1'
+
+
+DEFAULT_USER_AGENT = (
+    'Mozilla/5.0 (Linux; Android 12; Pixel 5) AppleWebKit/537.36 '
+    '(KHTML, like Gecko) Chrome/92.0.4515.131 Mobile Safari/537.36'
+)
