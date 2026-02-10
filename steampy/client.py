@@ -146,6 +146,10 @@ class SteamClient:
             updated_guard['identity_secret'] = self._identity_secret
         self.steam_guard = updated_guard
 
+    def _print_login_step(self, message: str) -> None:
+        account_label = self.username or '<no-username>'
+        print(f'[steampy][client] {account_label} | {message}')
+
     def _clear_auth_cookies(self) -> None:
         auth_cookie_names = {'sessionid', 'steamLoginSecure', 'steamRefresh_steam', 'steamCountry', 'steamRememberLogin'}
         cookies_to_clear = [cookie for cookie in self._session.cookies if cookie.name in auth_cookie_names]
@@ -201,6 +205,7 @@ class SteamClient:
         if shared_secret:
             self._shared_secret = shared_secret
         self._sync_steam_guard()
+        self._print_login_step('Starting login process')
 
         has_client_credentials = all((self.username, self._password, self._shared_secret))
         has_call_credentials = all((username, password, shared_secret))
@@ -212,18 +217,20 @@ class SteamClient:
             self._shared_secret = shared_secret
             self._sync_steam_guard()
             has_client_credentials = True
+            self._print_login_step('Using credentials passed directly to login()')
 
         if not has_client_credentials and not has_refresh_token:
+            self._print_login_step('Login failed: no credentials and no refresh_token')
             raise InvalidCredentials(
                 'You must provide either username/password/shared_secret or a valid refresh_token'
             )
 
         if self.was_login_executed and self.is_session_alive():
+            self._print_login_step('Existing session is already alive, skipping login')
             return
 
-        # Old auth cookies may conflict with refresh/cookie rotation. Start login from a clean auth state.
-        self._clear_auth_cookies()
         self._session.cookies.set('steamRememberLogin', 'true')
+        self._print_login_step('Created login executor, attempting refresh/cookies flow first when possible')
         login_executor = LoginExecutor(
             self.username,
             self._password,
@@ -233,15 +240,18 @@ class SteamClient:
         )
         login_executor.login()
         self._refresh_token = login_executor.refresh_token
+        self._print_login_step('Login executor finished')
         if not self._steam_id:
             steam_login_secure_cookie = next((c for c in self._session.cookies if c.name == 'steamLoginSecure'), None)
             if steam_login_secure_cookie and steam_login_secure_cookie.value:
                 self._steam_id = self._extract_steam_id_from_steam_login_secure(steam_login_secure_cookie.value)
             if not self._steam_id:
                 self._steam_id = self._fetch_steam_id_from_community_page()
+            self._print_login_step(f'Initialized steam_id={self._steam_id}')
         self._sync_steam_guard()
         self.was_login_executed = True
         self.market._set_login_executed(self.steam_guard, self._get_session_id())
+        self._print_login_step('Session marked as authenticated')
 
         steam_login_secure_cookie = next((c for c in self._session.cookies if c.name == 'steamLoginSecure'), None)
         self._access_token = None
@@ -253,6 +263,9 @@ class SteamClient:
                 'API-key mode will still work, webtoken mode may fail.',
                 self.username,
             )
+            self._print_login_step('steamLoginSecure/access token missing; API-key mode remains available')
+        else:
+            self._print_login_step('Access token extracted from steamLoginSecure cookie')
 
     @login_required
     def logout(self) -> None:

@@ -83,46 +83,93 @@ class LoginExecutor:
     def _has_credentials_login_data(self) -> bool:
         return all((self.username, self.password, self.shared_secret))
 
+    def _print_step(self, message: str) -> None:
+        account_label = self.username or '<no-username>'
+        print(f'[steampy][login] {account_label} | {message}')
+
+    def _clear_auth_cookies(self) -> None:
+        auth_cookie_names = {'sessionid', 'steamLoginSecure', 'steamRefresh_steam', 'steamCountry', 'steamRememberLogin'}
+        cookie_jar = getattr(self.session, 'cookies', None)
+        if cookie_jar is None:
+            return
+
+        try:
+            cookies_to_clear = [cookie for cookie in cookie_jar if cookie.name in auth_cookie_names]
+        except TypeError:
+            return
+
+        for cookie in cookies_to_clear:
+            try:
+                cookie_jar.clear(domain=cookie.domain, path=cookie.path, name=cookie.name)
+            except KeyError:
+                continue
+
     def login(self) -> Session:
+        self._print_step('Starting login flow')
         if self.refresh_token and self.refresh_session():
+            self._print_step('Refresh flow finished, validating authenticated session')
             if self._check_steam_session():
+                self._print_step('Session restored via refresh token')
                 logger.info('%s | Session restored via refresh token', self.username)
                 return self.session
+            self._print_step('Refresh completed, but session is not authenticated. Falling back to credentials login')
             logger.info('%s | Refresh session check failed, using full login flow', self.username)
         elif self.refresh_token and not self._has_credentials_login_data():
+            self._print_step('Refresh login failed and credentials are missing')
             raise InvalidCredentials(
                 'Refresh token login failed and no username/password/shared_secret were provided for fallback login'
             )
 
         if not self._has_credentials_login_data():
+            self._print_step('Credentials are missing for full login flow')
             raise InvalidCredentials('Username, password and shared_secret are required for credentials login flow')
 
+        self._print_step('Preparing full credentials login flow')
+        self._clear_auth_cookies()
+        self.session.cookies.set('steamRememberLogin', 'true')
+
+        self._print_step('Sending credentials login request')
         login_response = self._send_login_request()
         login_payload = self._parse_json(login_response, 'BeginAuthSessionViaCredentials')
         if not login_payload.get('response'):
             raise ApiException('No response received from Steam API. Please try again later.')
 
+        self._print_step('Checking captcha and applying Steam Guard code')
         self._check_for_captcha(login_payload)
         self._update_steam_guard(login_payload)
+        self._print_step('Finalizing credentials login')
         finalized_response = self._finalize_login()
         finalized_payload = self._parse_json(finalized_response, 'jwt/finalizelogin')
+        self._print_step('Performing redirect chain and synchronizing cookies')
         self._perform_redirects(finalized_payload)
         self.set_sessionid_cookies()
+        self._print_step('Credentials login completed')
         return self.session
 
     def refresh_session(self) -> bool:
         logger.info('%s | Trying to refresh session with refresh token', self.username)
-        try:
-            finalized_response = self._finalize_login(use_cookie_sessionid=False)
-            finalized_payload = self._parse_json(finalized_response, 'jwt/finalizelogin.refresh')
-            self._perform_redirects(finalized_payload)
-            self.set_sessionid_cookies()
-            self._request('GET', SteamUrl.COMMUNITY_URL)
-            self._request('GET', SteamUrl.STORE_URL)
-            return True
-        except ApiException as exc:
-            logger.warning('%s | Session refresh failed: %s', self.username, exc)
-            return False
+        self._print_step('Refresh token found, trying refresh login first')
+        has_session_cookie = bool(self._resolve_sessionid_cookie())
+        refresh_attempts = [True, False] if has_session_cookie else [False]
+
+        for use_cookie_sessionid in refresh_attempts:
+            attempt_label = 'refresh_token + existing cookies' if use_cookie_sessionid else 'refresh_token only'
+            self._print_step(f'Attempting refresh via {attempt_label}')
+            try:
+                finalized_response = self._finalize_login(use_cookie_sessionid=use_cookie_sessionid)
+                finalized_payload = self._parse_json(finalized_response, 'jwt/finalizelogin.refresh')
+                self._perform_redirects(finalized_payload)
+                self.set_sessionid_cookies()
+                self._request('GET', SteamUrl.COMMUNITY_URL)
+                self._request('GET', SteamUrl.STORE_URL)
+                self._print_step(f'Refresh succeeded via {attempt_label}')
+                return True
+            except ApiException as exc:
+                logger.warning('%s | Session refresh failed via %s: %s', self.username, attempt_label, exc)
+                self._print_step(f'Refresh failed via {attempt_label}: {exc}')
+
+        self._print_step('Refresh flow failed, credentials login is required')
+        return False
 
     def _send_login_request(self) -> Response:
         rsa_params = self._fetch_rsa_params()
@@ -200,6 +247,7 @@ class LoginExecutor:
         if not steam_id:
             raise ApiException('Cannot perform redirects after login, no steamID fetched')
 
+        self._print_step(f'Executing {len(transfer_info)} redirect(s)')
         for pass_data in transfer_info:
             post_params = dict(pass_data.get('params', {}))
             post_params['steamID'] = steam_id
@@ -219,6 +267,7 @@ class LoginExecutor:
         if response.status_code != HTTPStatus.OK:
             raise ApiException('Cannot update Steam guard')
 
+        self._print_step('Steam Guard code accepted, polling auth session status')
         self._poll_session_status(client_id, request_id)
 
     def _poll_session_status(self, client_id: str, request_id: str) -> None:
@@ -230,6 +279,7 @@ class LoginExecutor:
         if not refresh_token:
             raise InvalidCredentials(f'Steam did not return refresh token during login. Response: {payload}')
         self.refresh_token = refresh_token
+        self._print_step('Received new refresh token from Steam')
 
     def _check_steam_session(self) -> bool:
         try:
@@ -268,6 +318,9 @@ class LoginExecutor:
             sessionid = self._resolve_sessionid_cookie()
             if not sessionid:
                 raise ApiException('sessionid cookie is missing before finalizing login')
+            self._print_step('Finalizing login using existing sessionid cookie')
+        else:
+            self._print_step('Finalizing login without sessionid cookie')
 
         redir = f'{SteamUrl.COMMUNITY_URL}/login/home/?goto='
         files = {'nonce': (None, self.refresh_token), 'sessionid': (None, sessionid), 'redir': (None, redir)}

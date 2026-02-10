@@ -4,6 +4,7 @@ from unittest.mock import MagicMock
 from requests import Session
 from requests.cookies import RequestsCookieJar
 
+from steampy.exceptions import ApiException
 from steampy.login import LoginExecutor, InvalidCredentials
 
 
@@ -67,3 +68,23 @@ class TestLoginExecutorUnit(TestCase):
 
         _, kwargs = executor._request.call_args
         self.assertEqual(kwargs['files']['sessionid'][1], 'community-sid')
+
+    def test_refresh_session_tries_cookie_then_refresh_only(self):
+        session = Session()
+        jar = RequestsCookieJar()
+        jar.set('sessionid', 'community-sid', domain='steamcommunity.com', path='/')
+        session.cookies = jar
+
+        executor = LoginExecutor('user', 'pass', 'secret', session, refresh_token='refresh-token')
+        executor._finalize_login = MagicMock(side_effect=[ApiException('cookie refresh failed'), MagicMock()])
+        executor._parse_json = MagicMock(return_value={'transfer_info': [{'url': 'u', 'params': {}}], 'steamID': '1'})
+        executor._perform_redirects = MagicMock()
+        executor.set_sessionid_cookies = MagicMock()
+        executor._request = MagicMock(return_value=MagicMock(status_code=200, url='https://steamcommunity.com', text='ok'))
+
+        result = executor.refresh_session()
+
+        self.assertTrue(result)
+        self.assertEqual(executor._finalize_login.call_count, 2)
+        self.assertEqual(executor._finalize_login.call_args_list[0].kwargs, {'use_cookie_sessionid': True})
+        self.assertEqual(executor._finalize_login.call_args_list[1].kwargs, {'use_cookie_sessionid': False})
