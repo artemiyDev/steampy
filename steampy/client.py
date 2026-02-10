@@ -115,6 +115,14 @@ class SteamClient:
             raise InvalidCredentials('Web token requires authenticated session. Call login() first.')
         raise ApiException('Web token is not available in current session. Re-login and retry.')
 
+    def _sync_access_token_from_cookies(self) -> bool:
+        steam_login_secure = self._get_cookie_value(
+            'steamLoginSecure',
+            preferred_domains=('store.steampowered.com', 'steamcommunity.com'),
+        )
+        self._access_token = self._extract_access_token(steam_login_secure) if steam_login_secure else None
+        return bool(self._access_token)
+
     @staticmethod
     def _extract_access_token(cookie_value: str) -> Optional[str]:
         decoded_cookie_value = urlparse.unquote(cookie_value)
@@ -227,21 +235,27 @@ class SteamClient:
             has_client_credentials = True
             self._print_login_step('Using credentials passed directly to login()')
 
+        if self.was_login_executed:
+            self._print_login_step('Checking existing cookies session')
+            try:
+                if self.is_session_alive():
+                    if self._access_token:
+                        self._print_login_step('Existing session is already alive, skipping login')
+                        return
+                    self._print_login_step('Session is alive, but access token is missing. Trying to restore from cookies')
+                    if self._sync_access_token_from_cookies():
+                        self._print_login_step('Access token restored from steamLoginSecure cookie')
+                        return
+                    self._print_login_step('Access token is still missing. Continuing refresh/credentials flow')
+                self._print_login_step('Cookies session is not valid, trying refresh token flow')
+            except ApiException as exc:
+                self._print_login_step(f'Cookies session check failed: {exc}. Trying refresh token flow')
+
         if not has_client_credentials and not has_refresh_token:
             self._print_login_step('Login failed: no credentials and no refresh_token')
             raise InvalidCredentials(
                 'You must provide either username/password/shared_secret or a valid refresh_token'
             )
-
-        if self.was_login_executed:
-            self._print_login_step('Checking existing cookies session')
-            try:
-                if self.is_session_alive():
-                    self._print_login_step('Existing session is already alive, skipping login')
-                    return
-                self._print_login_step('Cookies session is not valid, trying refresh token flow')
-            except ApiException as exc:
-                self._print_login_step(f'Cookies session check failed: {exc}. Trying refresh token flow')
 
         self._session.cookies.set('steamRememberLogin', 'true')
         self._print_login_step('Created login executor, attempting refresh/cookies flow first when possible')
@@ -267,10 +281,7 @@ class SteamClient:
         self.market._set_login_executed(self.steam_guard, self._get_session_id())
         self._print_login_step('Session marked as authenticated')
 
-        steam_login_secure_cookie = next((c for c in self._session.cookies if c.name == 'steamLoginSecure'), None)
-        self._access_token = None
-        if steam_login_secure_cookie and steam_login_secure_cookie.value:
-            self._access_token = self._extract_access_token(steam_login_secure_cookie.value)
+        self._sync_access_token_from_cookies()
         if not self._access_token:
             logger.warning(
                 'steamLoginSecure/access token is missing after login for user=%s. '
@@ -393,6 +404,7 @@ class SteamClient:
 
     def _initialize_login_state_from_cookies(self, steam_login_secure: str = None) -> None:
         self.was_login_executed = True
+        self._sync_access_token_from_cookies()
 
         if not self._steam_id:
             steam_login_secure = steam_login_secure or self._get_cookie_value(

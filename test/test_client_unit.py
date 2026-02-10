@@ -42,6 +42,7 @@ class TestSteamClientUnit(TestCase):
                 login_cookies={'sessionid': 'sid', 'steamLoginSecure': '76561198012345678%7C%7Cjwt-token'},
             )
         self.assertEqual(client.steam_guard['steamid'], '76561198012345678')
+        self.assertEqual(client._access_token, 'jwt-token')
 
     def test_set_login_cookies_sets_auth_cookies_for_both_domains(self):
         with patch.object(SteamClient, 'get_steam_id', side_effect=AssertionError('should not be called')):
@@ -159,10 +160,26 @@ class TestSteamClientUnit(TestCase):
             refresh_token='refresh-token',
             login_cookies={'sessionid': 'sid', 'steamLoginSecure': '76561198012345678%7C%7Cjwt-token'},
         )
+        client._access_token = None
         client.is_session_alive = MagicMock(return_value=True)
 
         client.login()
 
+        self.assertEqual(client._access_token, 'jwt-token')
+        mocked_login_executor_cls.assert_not_called()
+
+    @patch('steampy.client.LoginExecutor')
+    def test_login_cookie_only_mode_restores_access_token_when_session_alive(self, mocked_login_executor_cls):
+        client = SteamClient(
+            'api-key',
+            login_cookies={'sessionid': 'sid', 'steamLoginSecure': '76561198012345678%7C%7Cjwt-token'},
+        )
+        client._access_token = None
+        client.is_session_alive = MagicMock(return_value=True)
+
+        client.login()
+
+        self.assertEqual(client._access_token, 'jwt-token')
         mocked_login_executor_cls.assert_not_called()
 
     @patch('steampy.client.LoginExecutor')
