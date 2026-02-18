@@ -167,13 +167,18 @@ def merge_items(items: List[dict], descriptions: dict, **kwargs) -> dict:
 
 def get_market_listings_from_html(html: str) -> dict:
     document = BeautifulSoup(html, 'html.parser')
-    nodes = document.select('div[id=myListings]')[0].findAll('div', {'class': 'market_home_listing_table'})
+    listings_root = document.select_one('div#myListings')
+    if listings_root is None:
+        return {'buy_orders': {}, 'sell_listings': {}}
+
+    nodes = listings_root.findAll('div', {'class': 'market_home_listing_table'})
     sell_listings_dict = {}
     buy_orders_dict = {}
 
     for node in nodes:
         if 'My sell listings' in node.text:
-            sell_listings_dict = get_sell_listings_from_node(node)
+            sell_listings_active = get_sell_listings_from_node(node)
+            sell_listings_dict.update(sell_listings_active)
         elif 'My listings awaiting confirmation' in node.text:
             sell_listings_awaiting_conf = get_sell_listings_from_node(node)
             for listing in sell_listings_awaiting_conf.values():
