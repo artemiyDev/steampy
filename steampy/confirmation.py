@@ -1,7 +1,9 @@
 import enum
 import json
 import logging
+import re
 import time
+from datetime import datetime
 from http import HTTPStatus
 from typing import List
 
@@ -17,14 +19,26 @@ logger = logging.getLogger(__name__)
 
 
 class Confirmation:
-    def __init__(self, data_confid: str, nonce: str, creator_id: str):
+    def __init__(
+        self,
+        data_confid: str,
+        nonce: str,
+        creator_id: str = None,
+        conf_type: str = None,
+        creation_time: datetime = None,
+    ):
         self.data_confid = data_confid
         self.nonce = nonce
         self.creator_id = creator_id
+        self.id = str(data_confid)
+        self.type = conf_type
+        self.creation_time = creation_time
+        self.details = None
 
 
 class Tag(enum.Enum):
     CONF = 'conf'
+    GETLIST = 'getlist'
     DETAILS = 'details'
     ALLOW = 'allow'
     CANCEL = 'cancel'
@@ -32,6 +46,7 @@ class Tag(enum.Enum):
 
 class ConfirmationExecutor:
     CONF_URL = 'https://steamcommunity.com/mobileconf'
+    ITEM_INFO_RE = re.compile(r"'confiteminfo', (?P<item_info>.+), UserYou")
     REQUEST_TIMEOUT_SECONDS = 20
     NETWORK_RETRIES = 3
     RETRY_BACKOFF_SECONDS = 1
@@ -70,10 +85,10 @@ class ConfirmationExecutor:
         confirmation = self._select_trade_offer_confirmation(confirmations, trade_offer_id)
         return self._send_confirmation(confirmation)
 
-    def confirm_sell_listing(self, asset_id: str) -> dict:
+    def confirm_sell_listing(self, asset_id: str, app_id: str = None, context_id: str = None) -> dict:
         time.sleep(1)
         confirmations = self._get_confirmations()
-        confirmation = self._select_sell_listing_confirmation(confirmations, asset_id)
+        confirmation = self._select_sell_listing_confirmation(confirmations, asset_id, app_id, context_id)
         return self._send_confirmation(confirmation)
 
     def _send_confirmation(self, confirmation: Confirmation) -> dict:
@@ -86,30 +101,64 @@ class ConfirmationExecutor:
         return self._request('GET', f'{self.CONF_URL}/ajaxop', params=params, headers=headers).json()
 
     def _get_confirmations(self) -> List[Confirmation]:
-        confirmations: List[Confirmation] = []
-        confirmations_page = self._fetch_confirmations_page()
-        if confirmations_page.status_code != HTTPStatus.OK:
-            raise ConfirmationExpected
+        last_error = None
+        for tag in (Tag.GETLIST.value, Tag.CONF.value):
+            try:
+                confirmations_json = self._fetch_confirmations_page(tag)
+            except ConfirmationExpected as exc:
+                last_error = exc
+                continue
 
-        confirmations_json = json.loads(confirmations_page.text)
-        for conf in confirmations_json.get('conf', []):
-            confirmations.append(Confirmation(conf['id'], conf['nonce'], conf['creator_id']))
-        return confirmations
+            confirmations: List[Confirmation] = []
+            for conf in confirmations_json.get('conf', []):
+                creation_time = None
+                if conf.get('creation_time') is not None:
+                    creation_time = datetime.fromtimestamp(conf['creation_time'])
+                confirmations.append(
+                    Confirmation(
+                        conf['id'],
+                        conf['nonce'],
+                        conf.get('creator_id'),
+                        conf.get('type'),
+                        creation_time,
+                    )
+                )
+            if confirmations or tag == Tag.CONF.value:
+                return confirmations
 
-    def _fetch_confirmations_page(self) -> requests.Response:
-        tag = Tag.CONF.value
+        if last_error is not None:
+            raise last_error
+        raise ConfirmationExpected('Unable to fetch mobile confirmations')
+
+    def _fetch_confirmations_page(self, tag: str) -> dict:
         params = self._create_confirmation_params(tag)
-        headers = {'X-Requested-With': 'com.valvesoftware.android.steam.community'}
-        response = self._request('GET', f'{self.CONF_URL}/getlist', params=params, headers=headers)
+        response = self._request('GET', f'{self.CONF_URL}/getlist', params=params)
         if 'Steam Guard Mobile Authenticator is providing incorrect Steam Guard codes.' in response.text:
             raise InvalidCredentials('Invalid Steam Guard file')
-        return response
+        if response.status_code != HTTPStatus.OK:
+            raise ConfirmationExpected(f'Failed to fetch confirmations. HTTP {response.status_code}')
+        try:
+            response_json = response.json()
+        except ValueError as exc:
+            raise ConfirmationExpected('Confirmation list is not valid JSON') from exc
+        if response_json.get('needauth'):
+            raise ConfirmationExpected('Steam requires renewed mobile confirmation auth')
+        if response_json.get('success') not in (None, 1, True):
+            raise ConfirmationExpected(response_json.get('message', 'Failed to fetch confirmation list'))
+        return response_json
 
     def _fetch_confirmation_details_page(self, confirmation: Confirmation) -> str:
         tag = f'details{confirmation.data_confid}'
         params = self._create_confirmation_params(tag)
         response = self._request('GET', f'{self.CONF_URL}/details/{confirmation.data_confid}', params=params)
         return response.json()['html']
+
+    def _fetch_confirmation_details(self, confirmation: Confirmation) -> dict:
+        html = self._fetch_confirmation_details_page(confirmation)
+        match = self.ITEM_INFO_RE.search(html)
+        if match is None:
+            return {}
+        return json.loads(match.group('item_info'))
 
     def _create_confirmation_params(self, tag_string: str) -> dict:
         timestamp = int(time.time())
@@ -126,31 +175,39 @@ class ConfirmationExecutor:
 
     def _select_trade_offer_confirmation(self, confirmations: List[Confirmation], trade_offer_id: str) -> Confirmation:
         for confirmation in confirmations:
+            if str(confirmation.creator_id) == str(trade_offer_id):
+                return confirmation
             confirmation_details_page = self._fetch_confirmation_details_page(confirmation)
             confirmation_id = self._get_confirmation_trade_offer_id(confirmation_details_page)
             if confirmation_id == trade_offer_id:
                 return confirmation
         raise ConfirmationExpected
 
-    def _select_sell_listing_confirmation(self, confirmations: List[Confirmation], asset_id: str) -> Confirmation:
+    def _select_sell_listing_confirmation(
+        self,
+        confirmations: List[Confirmation],
+        asset_id: str,
+        app_id: str = None,
+        context_id: str = None,
+    ) -> Confirmation:
         for confirmation in confirmations:
-            confirmation_details_page = self._fetch_confirmation_details_page(confirmation)
-            confirmation_id = self._get_confirmation_sell_listing_id(confirmation_details_page)
-            if confirmation_id == asset_id:
+            confirmation_details = self._fetch_confirmation_details(confirmation)
+            confirmation.details = confirmation_details or None
+            if self._details_match_sell_listing(confirmation_details, asset_id, app_id, context_id):
                 return confirmation
         raise ConfirmationExpected
 
     @staticmethod
-    def _get_confirmation_sell_listing_id(confirmation_details_page: str) -> str:
-        soup = BeautifulSoup(confirmation_details_page, 'html.parser')
-        scripts = soup.select('script')
-        if len(scripts) < 3 or scripts[2].string is None:
-            raise ConfirmationExpected('Unable to parse sell listing confirmation details')
-
-        scr_raw = scripts[2].string.strip()
-        scr_raw = scr_raw[scr_raw.index("'confiteminfo', ") + 16 :]
-        scr_raw = scr_raw[: scr_raw.index(', UserYou')].replace('\n', '')
-        return json.loads(scr_raw)['id']
+    def _details_match_sell_listing(details: dict, asset_id: str, app_id: str = None, context_id: str = None) -> bool:
+        if not details:
+            return False
+        if str(details.get('id')) != str(asset_id):
+            return False
+        if app_id is not None and str(details.get('appid')) != str(app_id):
+            return False
+        if context_id is not None and str(details.get('contextid')) != str(context_id):
+            return False
+        return True
 
     @staticmethod
     def _get_confirmation_trade_offer_id(confirmation_details_page: str) -> str:

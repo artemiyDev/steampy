@@ -176,7 +176,7 @@ class SteamMarket:
         response_json = self._json_or_raise(response, 'create_sell_order')
         has_pending_confirmation = 'pending confirmation' in response_json.get('message', '').lower()
         if response_json.get('needs_mobile_confirmation') or (not response_json.get('success') and has_pending_confirmation):
-            return self._confirm_sell_listing(assetid)
+            return self._confirm_sell_listing(assetid, game)
 
         return response_json
 
@@ -297,7 +297,7 @@ class SteamMarket:
 
         return response_json
 
-    def _confirm_sell_listing(self, asset_id: str) -> dict:
+    def _confirm_sell_listing(self, asset_id: str, game: GameOptions) -> dict:
         if not self._steam_guard:
             raise ApiException('Auth secrets are required for sell listing confirmation')
         if not self._steam_guard.get('identity_secret'):
@@ -308,4 +308,4 @@ class SteamMarket:
         con_executor = ConfirmationExecutor(
             self._steam_guard['identity_secret'], self._steam_guard['steamid'], self._session
         )
-        return con_executor.confirm_sell_listing(asset_id)
+        return con_executor.confirm_sell_listing(asset_id, game.app_id, game.context_id)
