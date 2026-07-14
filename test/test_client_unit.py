@@ -9,6 +9,7 @@ from steampy.client import SteamClient
 from steampy.exceptions import ApiException
 from steampy.login import InvalidCredentials
 from steampy.models import TradeOfferState
+from steampy.utils import account_id_to_steam_id
 
 
 class DummyResponse:
@@ -331,6 +332,42 @@ class TestSteamClientUnit(TestCase):
 
         with self.assertRaises(ApiException):
             client.accept_trade_offer('123')
+
+    def test_accept_trade_offer_uses_webapi_partner_without_fetching_html(self):
+        client = SteamClient('api-key')
+        client.was_login_executed = True
+        client.username = 'user'
+        client._access_token = None
+        client._session.cookies.set('sessionid', 'sid', domain='steamcommunity.com', path='/')
+        client.get_trade_offer = MagicMock(
+            return_value={
+                'response': {
+                    'offer': {
+                        'trade_offer_state': TradeOfferState.Active.value,
+                        'accountid_other': 123,
+                    }
+                }
+            }
+        )
+        client._fetch_trade_partner_id = MagicMock(side_effect=AssertionError('HTML must not be fetched'))
+        client._request = MagicMock(return_value=DummyResponse(json_data={'tradeofferid': '456'}))
+
+        response = client.accept_trade_offer('456')
+
+        self.assertEqual(response, {'tradeofferid': '456'})
+        client._fetch_trade_partner_id.assert_not_called()
+        client._request.assert_called_once_with(
+            'POST',
+            'https://steamcommunity.com/tradeoffer/456/accept',
+            data={
+                'sessionid': 'sid',
+                'tradeofferid': '456',
+                'serverid': '1',
+                'partner': account_id_to_steam_id('123'),
+                'captcha': '',
+            },
+            headers={'Referer': 'https://steamcommunity.com/tradeoffer/456'},
+        )
 
     def test_request_retries_network_errors_then_succeeds(self):
         client = SteamClient('api-key')
