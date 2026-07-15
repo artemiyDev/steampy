@@ -35,7 +35,7 @@ class LoginExecutor:
         self.password = password or ''
         self.shared_secret = shared_secret or ''
         self.session = session
-        self.session.headers.setdefault('User-Agent', DEFAULT_USER_AGENT)
+        self.session.headers['User-Agent'] = DEFAULT_USER_AGENT
         self.refresh_token = refresh_token or ''
 
     def _request(self, method: str, url: str, **kwargs) -> Response:

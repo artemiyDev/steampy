@@ -31,7 +31,7 @@ class SteamMarket:
 
     def __init__(self, session: Session) -> None:
         self._session = session
-        self._session.headers.setdefault('User-Agent', DEFAULT_USER_AGENT)
+        self._session.headers['User-Agent'] = DEFAULT_USER_AGENT
         self._steam_guard = None
         self._session_id = None
         self.was_login_executed = False

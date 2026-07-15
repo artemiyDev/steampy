@@ -55,7 +55,7 @@ class SteamClient:
     ) -> None:
         self._api_key = api_key
         self._session = requests.Session()
-        self._session.headers.setdefault('User-Agent', DEFAULT_USER_AGENT)
+        self._session.headers['User-Agent'] = DEFAULT_USER_AGENT
         self._access_token: Optional[str] = None
 
         if proxies:
